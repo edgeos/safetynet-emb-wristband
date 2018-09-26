@@ -99,9 +99,7 @@
       <file file_name="$(NRF_SDK_DIR)/modules/nrfx/drivers/src/prs/nrfx_prs.c">
         <configuration Name="Debug" build_exclude_from_build="No" />
       </file>
-      <file file_name="nrfx_pwm.c">
-        <configuration Name="Debug" build_exclude_from_build="No" />
-      </file>
+      <file file_name="$(NRF_SDK_DIR)/modules/nrfx/drivers/src/nrfx_pwm.c" />
       <file file_name="$(NRF_SDK_DIR)/modules/nrfx/drivers/src/nrfx_uart.c" />
       <file file_name="$(NRF_SDK_DIR)/modules/nrfx/drivers/src/nrfx_uarte.c" />
     </folder>
