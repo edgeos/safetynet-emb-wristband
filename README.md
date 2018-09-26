@@ -1,9 +1,7 @@
 Getting Started
 ===============
 
-###############
 ## SDK SETUP ##
-###############
 
 - The Nordic SDK needs to be downloaded and installed. Installers can be found here: https://developer.nordicsemi.com/nRF5_SDK/
   The current version used by this project is v15.2.0.
@@ -16,9 +14,7 @@ Getting Started
 
 - NOTE: You will not be able to build & compile unless this link is setup correctly.
 
-#########
 ## IDE ##
-#########
 
 - All development is done using Segger Embedded Studio (SES). This can be downloaded from the following location: https://www.segger.com/downloads/embedded-studio 
 
@@ -26,9 +22,7 @@ Getting Started
 
 - Note that Makefiles and Eclipse project files are not provided in this repo - they must be configured manually if desired. 
 
-###########
 ## OTHER ##
-###########
 
 - Download and install the Segger JLink Software if it's not already installed from here: https://www.segger.com/downloads/jlink/#J-LinkSoftwareAndDocumentationPack
 
