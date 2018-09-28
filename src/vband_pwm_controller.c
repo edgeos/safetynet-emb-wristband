@@ -61,7 +61,9 @@
 #include "nrf_log_ctrl.h"
 #include "nrf_log_default_backends.h"
 
-#define BUZZER_GPIO BSP_LED_1     
+#ifndef BUZZER_GPIO
+#define BUZZER_GPIO BSP_LED_1
+#endif     
 
 #define BUZZER_WARNING_PWM_FREQUENCY          4000  /**< in Hz, the frequency at which the PWM signal changes */
 #define BUZZER_WARNING_PWM_DUTY_CYCLE           50  /**< in %, the duty cycle of PWM signal */
@@ -73,6 +75,16 @@
 #define BUZZER_ALARM_PWM_PERIOD                500  /**< in msec, how often the PWM signal should be turned on */
 #define BUZZER_ALARM_PWM_PERIOD_ON             250  /**< in msec, how long the PWM signal is activated per period */
 
+#define LED_BLE_ADVERTISTING_PWM_FREQUENCY          1000  /**< in Hz, the frequency at which the PWM signal changes */
+#define LED_BLE_ADVERTISTING_PWM_DUTY_CYCLE          100  /**< in %, the duty cycle of PWM signal */
+#define LED_BLE_ADVERTISTING_PWM_PERIOD             1000  /**< in msec, how often the PWM signal should be turned on */
+#define LED_BLE_ADVERTISTING_PWM_PERIOD_ON           250  /**< in msec, how long the PWM signal is activated per period */
+
+#define LED_BLE_CONNECTED_PWM_FREQUENCY             1000  /**< in Hz, the frequency at which the PWM signal changes */
+#define LED_BLE_CONNECTED_PWM_DUTY_CYCLE             100  /**< in %, the duty cycle of PWM signal */
+#define LED_BLE_CONNECTED_PWM_PERIOD                3000  /**< in msec, how often the PWM signal should be turned on */
+#define LED_BLE_CONNECTED_PWM_PERIOD_ON              250  /**< in msec, how long the PWM signal is activated per period */
+
 static nrf_drv_pwm_t m_pwm0 = NRF_DRV_PWM_INSTANCE(0); // Assign channel 0 to Buzzer
 static nrf_drv_pwm_t m_pwm1 = NRF_DRV_PWM_INSTANCE(1);
 static nrf_drv_pwm_t m_pwm2 = NRF_DRV_PWM_INSTANCE(2);
@@ -82,10 +94,10 @@ static nrf_drv_pwm_t m_pwm3 = NRF_DRV_PWM_INSTANCE(3);
 // the relevant ones when switching from one demo to another.
 #define USED_PWM(idx) (1UL << idx)
 static uint8_t m_used = 0;
-static pwm_config_vals new_pwm0_vals = {BUZZER_GPIO,0,0,0,0};
-static pwm_config_vals new_pwm1_vals = {0,0,0,0,0};
-static pwm_config_vals new_pwm2_vals = {0,0,0,0,0};
-static pwm_config_vals new_pwm3_vals = {0,0,0,0,0};
+static pwm_config_vals new_pwm0_vals = {BUZZER_GPIO,0,0,0,0,false};
+static pwm_config_vals new_pwm1_vals = {LED_1,0,0,0,0,false};
+static pwm_config_vals new_pwm2_vals = {0,0,0,0,0,false};
+static pwm_config_vals new_pwm3_vals = {0,0,0,0,0,false};
 static nrf_pwm_values_common_t /*const*/ stay_off_values[2] = { 0, 0 };
 
 static void configure_pwm_instance(nrf_drv_pwm_t *m_pwmX, pwm_config_vals *new_pwmX_vals)
@@ -136,7 +148,10 @@ static void configure_pwm_instance(nrf_drv_pwm_t *m_pwmX, pwm_config_vals *new_p
         .end_delay       = 0
     };
 
-    (void)nrf_drv_pwm_complex_playback(m_pwmX, &seq0, &seq1, 1, NRF_DRV_PWM_FLAG_LOOP);
+    if (new_pwmX_vals->loop_flag)
+      (void)nrf_drv_pwm_complex_playback(m_pwmX, &seq0, &seq1, 1, NRF_DRV_PWM_FLAG_LOOP);
+    else
+      (void)nrf_drv_pwm_complex_playback(m_pwmX, &seq0, &seq1, 1, NRF_DRV_PWM_FLAG_STOP);
 }
 
 void set_buzzer_status(buzzer_status_t new_status)
@@ -167,6 +182,7 @@ void set_buzzer_status(buzzer_status_t new_status)
             new_pwm0_vals.pwm_duty_cycle = BUZZER_WARNING_PWM_DUTY_CYCLE;
             new_pwm0_vals.pwm_period =     BUZZER_WARNING_PWM_PERIOD;
             new_pwm0_vals.pwm_period_on =  BUZZER_WARNING_PWM_PERIOD_ON;
+            new_pwm0_vals.loop_flag =      true;
             break;
         case BUZZER_ON_ALARM:
             NRF_LOG_INFO("Transition to alarm buzzer");
@@ -174,6 +190,7 @@ void set_buzzer_status(buzzer_status_t new_status)
             new_pwm0_vals.pwm_duty_cycle = BUZZER_ALARM_PWM_DUTY_CYCLE;
             new_pwm0_vals.pwm_period =     BUZZER_ALARM_PWM_PERIOD;
             new_pwm0_vals.pwm_period_on =  BUZZER_ALARM_PWM_PERIOD_ON;
+            new_pwm0_vals.loop_flag =      true;
             break;
         default:
             break;
@@ -184,6 +201,56 @@ void set_buzzer_status(buzzer_status_t new_status)
     {
       m_used |= USED_PWM(0);
       (void)configure_pwm_instance(&m_pwm0, &new_pwm0_vals);
+    }
+}
+
+void set_led_status(led_status_t new_status)
+{
+    static led_status_t current_status = LED_OFF;
+
+    // new status = old, no change
+    if (new_status == current_status)
+      return;
+    
+    // need to turn off before any state change
+    if (m_used & USED_PWM(1))
+    {
+        nrf_drv_pwm_uninit(&m_pwm1);
+        m_used ^= USED_PWM(1);
+    }
+
+    bool config_buzzer_flag = true;
+    switch (new_status)
+    {
+        case LED_OFF:
+            NRF_LOG_INFO("Turning LED off");
+            config_buzzer_flag = false;
+            break;
+        case LED_BLE_ADVERTISTING:
+            NRF_LOG_INFO("Transition to Advertising LED");
+            new_pwm1_vals.pwm_frequency =  LED_BLE_ADVERTISTING_PWM_FREQUENCY;
+            new_pwm1_vals.pwm_duty_cycle = LED_BLE_ADVERTISTING_PWM_DUTY_CYCLE;
+            new_pwm1_vals.pwm_period =     LED_BLE_ADVERTISTING_PWM_PERIOD;
+            new_pwm1_vals.pwm_period_on =  LED_BLE_ADVERTISTING_PWM_PERIOD_ON;
+            new_pwm1_vals.loop_flag =      true;
+            break;
+        case LED_BLE_CONNECTED:
+            NRF_LOG_INFO("Transition to Connected LED");
+            new_pwm1_vals.pwm_frequency =  LED_BLE_CONNECTED_PWM_FREQUENCY;
+            new_pwm1_vals.pwm_duty_cycle = LED_BLE_CONNECTED_PWM_DUTY_CYCLE;
+            new_pwm1_vals.pwm_period =     LED_BLE_CONNECTED_PWM_PERIOD;
+            new_pwm1_vals.pwm_period_on =  LED_BLE_CONNECTED_PWM_PERIOD_ON;
+            new_pwm1_vals.loop_flag =      true;
+            break;
+        default:
+            break;
+    }
+    
+    // configure PWM instance with new vals
+    if (config_buzzer_flag)
+    {
+      m_used |= USED_PWM(1);
+      (void)configure_pwm_instance(&m_pwm1, &new_pwm1_vals);
     }
 }
 

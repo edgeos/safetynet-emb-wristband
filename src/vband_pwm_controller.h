@@ -59,6 +59,16 @@ typedef enum
     BUZZER_ON_ALARM
 } buzzer_status_t;
 
+/**@brief LED status.
+ *
+ * @details Different led states depending on BLE state
+ */
+typedef enum
+{
+    LED_OFF = 0,
+    LED_BLE_ADVERTISTING,
+    LED_BLE_CONNECTED
+} led_status_t;
 
 typedef struct
 {
@@ -67,6 +77,7 @@ typedef struct
     uint16_t pwm_duty_cycle;
     uint16_t pwm_period;
     uint16_t pwm_period_on;
+    bool     loop_flag;
 } pwm_config_vals;
 
 /**@brief Change buzzer state to input status
@@ -74,6 +85,11 @@ typedef struct
  */
 void set_buzzer_status(buzzer_status_t status);
 
+
+/**@brief Change led state to input status
+ *
+ */
+void set_led_status(led_status_t status);
 
 #ifdef __cplusplus
 }

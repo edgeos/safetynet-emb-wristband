@@ -84,6 +84,7 @@
 #include "nrf_log_default_backends.h"
 
 #include "vband_pwm_controller.h"
+#include "adxl362.h"
 
 
 #define DEVICE_NAME                         "GE GRC Wristband"                      /**< Name of device. Will be included in the advertising data. */
@@ -100,8 +101,8 @@
 #define MAX_BATTERY_LEVEL                   100                                     /**< Maximum simulated battery level. */
 #define BATTERY_LEVEL_INCREMENT             1                                       /**< Increment between each simulated battery level measurement. */
 
-#define MIN_CONN_INTERVAL                   MSEC_TO_UNITS(700, UNIT_1_25_MS)        /**< Minimum acceptable connection interval (0.4 seconds). */
-#define MAX_CONN_INTERVAL                   MSEC_TO_UNITS(1000, UNIT_1_25_MS)        /**< Maximum acceptable connection interval (0.65 second). */
+#define MIN_CONN_INTERVAL                   MSEC_TO_UNITS(400, UNIT_1_25_MS)        /**< Minimum acceptable connection interval (0.4 seconds). */
+#define MAX_CONN_INTERVAL                   MSEC_TO_UNITS(650, UNIT_1_25_MS)        /**< Maximum acceptable connection interval (0.65 second). */
 #define SLAVE_LATENCY                       0                                       /**< Slave latency. */
 #define CONN_SUP_TIMEOUT                    MSEC_TO_UNITS(4000, UNIT_10_MS)         /**< Connection supervisory time-out (4 seconds). */
 
@@ -136,7 +137,7 @@ static sensorsim_state_t m_battery_sim_state;                       /**< Battery
 
 static ble_uuid_t m_adv_uuids[] =                                   /**< Universally unique service identifiers. */
 {
-    {BLE_UUID_HEART_RATE_SERVICE, BLE_UUID_TYPE_BLE},
+    {BLE_UUID_BATTERY_SERVICE, BLE_UUID_TYPE_BLE},
     {BLE_UUID_DEVICE_INFORMATION_SERVICE, BLE_UUID_TYPE_BLE}
 };
 
@@ -767,7 +768,7 @@ static void clock_init(void)
  */
 int main(void)
 {
-    bool erase_bonds;
+    bool erase_bonds = true;
 
     // Initialize modules.
     log_init();
@@ -801,12 +802,15 @@ int main(void)
     conn_params_init();
     peer_manager_init();
     application_timers_start();
+    adxl362_init();
 
     //set_buzzer_status(BUZZER_ON_WARNING);
     set_buzzer_status(BUZZER_ON_ALARM);
+    //set_led_status(LED_BLE_CONNECTED);
 
     // Create a FreeRTOS task for the BLE stack.
     // The task will run advertising_start() before entering its loop.
+    //pm_peers_delete();
     nrf_sdh_freertos_init(advertising_start, &erase_bonds);
 
     NRF_LOG_INFO("Voltage Band FreeRTOS Scheduler started.");
