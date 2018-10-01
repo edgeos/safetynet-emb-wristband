@@ -793,7 +793,7 @@ int main(void)
 
     // Initialize modules.
     timers_init();
-    buttons_leds_init(&erase_bonds);
+    //buttons_leds_init(&erase_bonds);
     gap_params_init();
     gatt_init();
     advertising_init();
