@@ -50,11 +50,8 @@
 #include <stdio.h>
 #include <string.h>
 #include "nrf_drv_pwm.h"
-#include "app_util_platform.h"
 #include "app_error.h"
 #include "boards.h"
-#include "bsp.h"
-#include "nrf_drv_clock.h"
 #include "vband_pwm_controller.h"
 
 #include "nrf_log.h"

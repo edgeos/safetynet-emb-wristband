@@ -59,6 +59,7 @@
 #include "ble_advertising.h"
 #include "ble_bas.h"
 #include "ble_dis.h"
+#include "ble_nus.h" // UART service
 #include "ble_conn_params.h"
 #include "sensorsim.h"
 #include "nrf_sdh.h"
@@ -76,19 +77,39 @@
 #include "fds.h"
 #include "ble_conn_state.h"
 #include "nrf_drv_clock.h"
+#include "nrf_drv_rtc.h"
 #include "nrf_ble_gatt.h"
 #include "nrf_ble_qwr.h"
-
+#include "nrf_delay.h"
 #include "nrf_log.h"
 #include "nrf_log_ctrl.h"
 #include "nrf_log_default_backends.h"
 
+// internal peripheral contollers
 #include "vband_pwm_controller.h"
-#include "adxl362.h"
+#include "vband_saadc_controller.h"
+#include "vband_ext_sensor_controller.h"
 
+// external sensors
+#include "ccs811.h"
+#include "bme280.h"
+#include "ADXL362.h"
+#include "MAX30105.h"
+
+#define SAADC_WAKEUP_SAMPLE_INTERVAL              1000                                    /**< SAADC measurement interval (ms). */
+
+// defines for ext sensors, the first SAMPLE_INTERVAL defines how often we wake up, the
+// MEASURE_INTERVALs should be a multiple of the SAMPLE_INTERVAL
+#define EXT_SENSORS_WAKEUP_SAMPLE_INTERVAL        100                                      /**< Ext. Sensor measurement interval (ms). */
+#define EXT_SENSORS_WAKEUP_SAMPLE_INTERVAL_TICKS  APP_TIMER_TICKS(100)
+#define CCS811_MEASURE_INTERVAL                   1000                                    /**< CCS811 measurement interval (ms). */
+#define BME280_MEASURE_INTERVAL                   1000                                    /**< BME280 measurement interval (ms). */
+#define MAX30105_MEASURE_INTERVAL                 100                                     /**< MAX30105 measurement interval (ms). */
+#define ADXL362_MEASURE_INTERVAL                  75                                      /**< MAX30105 measurement interval (ms). */
 
 #define DEVICE_NAME                         "GE GRC Wristband"                      /**< Name of device. Will be included in the advertising data. */
 #define MANUFACTURER_NAME                   "GE"                                    /**< Manufacturer. Will be passed to Device Information Service. */
+#define NUS_SERVICE_UUID_TYPE               BLE_UUID_TYPE_VENDOR_BEGIN              /**< UUID type for the Nordic UART Service (vendor specific). */
 
 #define APP_BLE_OBSERVER_PRIO               3                                       /**< Application's BLE observer priority. You shouldn't need to modify this value. */
 #define APP_BLE_CONN_CFG_TAG                1                                       /**< A tag identifying the SoftDevice BLE configuration. */
@@ -101,8 +122,8 @@
 #define MAX_BATTERY_LEVEL                   100                                     /**< Maximum simulated battery level. */
 #define BATTERY_LEVEL_INCREMENT             1                                       /**< Increment between each simulated battery level measurement. */
 
-#define MIN_CONN_INTERVAL                   MSEC_TO_UNITS(400, UNIT_1_25_MS)        /**< Minimum acceptable connection interval (0.4 seconds). */
-#define MAX_CONN_INTERVAL                   MSEC_TO_UNITS(650, UNIT_1_25_MS)        /**< Maximum acceptable connection interval (0.65 second). */
+#define MIN_CONN_INTERVAL                   MSEC_TO_UNITS(20, UNIT_1_25_MS)        /**< Minimum acceptable connection interval (0.4 seconds). */
+#define MAX_CONN_INTERVAL                   MSEC_TO_UNITS(75, UNIT_1_25_MS)        /**< Maximum acceptable connection interval (0.65 second). */
 #define SLAVE_LATENCY                       0                                       /**< Slave latency. */
 #define CONN_SUP_TIMEOUT                    MSEC_TO_UNITS(4000, UNIT_10_MS)         /**< Connection supervisory time-out (4 seconds). */
 
@@ -110,7 +131,7 @@
 #define NEXT_CONN_PARAMS_UPDATE_DELAY       30000                                   /**< Time between each call to sd_ble_gap_conn_param_update after the first call (30 seconds). */
 #define MAX_CONN_PARAMS_UPDATE_COUNT        3                                       /**< Number of attempts before giving up the connection parameter negotiation. */
 
-#define SEC_PARAM_BOND                      1                                       /**< Perform bonding. */
+#define SEC_PARAM_BOND                      0                                       /**< Perform bonding. */
 #define SEC_PARAM_MITM                      0                                       /**< Man In The Middle protection not required. */
 #define SEC_PARAM_LESC                      0                                       /**< LE Secure Connections not enabled. */
 #define SEC_PARAM_KEYPRESS                  0                                       /**< Keypress notifications not enabled. */
@@ -123,25 +144,39 @@
 
 #define OSTIMER_WAIT_FOR_QUEUE              2                                       /**< Number of ticks to wait for the timer queue to be ready */
 
-
+BLE_NUS_DEF(m_nus, NRF_SDH_BLE_TOTAL_LINK_COUNT);                   /**< BLE NUS service instance. */
 BLE_BAS_DEF(m_bas);                                                 /**< Battery service instance. */
 NRF_BLE_GATT_DEF(m_gatt);                                           /**< GATT module instance. */
 NRF_BLE_QWR_DEF(m_qwr);                                             /**< Context for the Queued Write module.*/
 BLE_ADVERTISING_DEF(m_advertising);                                 /**< Advertising module instance. */
 
-static uint16_t m_conn_handle         = BLE_CONN_HANDLE_INVALID;    /**< Handle of the current connection. */
+static uint16_t m_conn_handle            = BLE_CONN_HANDLE_INVALID;                 /**< Handle of the current connection. */
+static uint16_t m_ble_nus_max_data_len   = BLE_GATT_ATT_MTU_DEFAULT - 3;            /**< Maximum length of data (in bytes) that can be transmitted to the peer by the Nordic UART service module. */
 
 static sensorsim_cfg_t   m_battery_sim_cfg;                         /**< Battery Level sensor simulator configuration. */
 static sensorsim_state_t m_battery_sim_state;                       /**< Battery Level sensor simulator state. */
+
+static bool m_ble_connected_bool = false;
 
 
 static ble_uuid_t m_adv_uuids[] =                                   /**< Universally unique service identifiers. */
 {
     {BLE_UUID_BATTERY_SERVICE, BLE_UUID_TYPE_BLE},
-    {BLE_UUID_DEVICE_INFORMATION_SERVICE, BLE_UUID_TYPE_BLE}
+    {BLE_UUID_DEVICE_INFORMATION_SERVICE, BLE_UUID_TYPE_BLE},
+    {BLE_UUID_NUS_SERVICE, NUS_SERVICE_UUID_TYPE}
 };
 
+// FreeRTOS Timers
 static TimerHandle_t m_battery_timer;                               /**< Definition of battery timer. */
+static TimerHandle_t m_saadc_timer;                                 /**< Definition of SAADC timer. */
+
+// FreeRTOS Tasks & semaphore (to prevent i2c contention)
+static TaskHandle_t saadc_sample_timer_handle;
+static TaskHandle_t adxl362_measure_task_handle; 
+static TaskHandle_t ccs811_measure_task_handle; 
+static TaskHandle_t bme280_measure_task_handle; 
+static TaskHandle_t max30105_measure_task_handle; 
+xSemaphoreHandle i2c_semaphore = 0;
 
 #if NRF_LOG_ENABLED
 static TaskHandle_t m_logger_thread;                                /**< Definition of Logger thread. */
@@ -227,6 +262,25 @@ static void battery_level_meas_timeout_handler(TimerHandle_t xTimer)
 }
 
 
+/**@brief Function for handling the SAADC sample timer time-out.
+ *
+ * @details This function will be called each time the SAADC sample measurement timer expires.
+ *
+ * @param[in] xTimer Handler to the timer that called this function.
+ *                   You may get identifier given to the function xTimerCreate using pvTimerGetTimerID.
+ */
+static void saadc_sample_timeout_handler(TimerHandle_t xTimer)
+{
+    UNUSED_PARAMETER(xTimer);
+
+    // only sample the electrode adc if we're in a connected state
+    if (m_ble_connected_bool)
+    {
+        vband_saadc_sample_electrode_channels();
+    }
+}
+
+
 /**@brief Function for the Timer initialization.
  *
  * @details Initializes the timer module. This creates and starts application timers.
@@ -246,6 +300,19 @@ static void timers_init(void)
 
     /* Error checking */
     if ( (NULL == m_battery_timer) )
+    {
+        APP_ERROR_HANDLER(NRF_ERROR_NO_MEM);
+    }
+
+    // Create timers.
+    m_saadc_timer =  xTimerCreate("SAADC",
+                                   SAADC_WAKEUP_SAMPLE_INTERVAL,
+                                   pdTRUE,
+                                   NULL,
+                                   saadc_sample_timeout_handler);
+
+    /* Error checking */
+    if ( (NULL == m_saadc_timer) )
     {
         APP_ERROR_HANDLER(NRF_ERROR_NO_MEM);
     }
@@ -282,10 +349,27 @@ static void gap_params_init(void)
 }
 
 
+/**@brief Function for handling events from the GATT library. */
+void gatt_evt_handler(nrf_ble_gatt_t * p_gatt, nrf_ble_gatt_evt_t const * p_evt)
+{
+    if ((m_conn_handle == p_evt->conn_handle) && (p_evt->evt_id == NRF_BLE_GATT_EVT_ATT_MTU_UPDATED))
+    {
+        m_ble_nus_max_data_len = p_evt->params.att_mtu_effective - OPCODE_LENGTH - HANDLE_LENGTH;
+        NRF_LOG_INFO("Data len is set to 0x%X(%d)", m_ble_nus_max_data_len, m_ble_nus_max_data_len);
+    }
+    NRF_LOG_DEBUG("ATT MTU exchange completed. central 0x%x peripheral 0x%x",
+                  p_gatt->att_mtu_desired_central,
+                  p_gatt->att_mtu_desired_periph);
+}
+
+
 /**@brief Function for initializing the GATT module. */
 static void gatt_init(void)
 {
-    ret_code_t err_code = nrf_ble_gatt_init(&m_gatt, NULL);
+    ret_code_t err_code = nrf_ble_gatt_init(&m_gatt, gatt_evt_handler);
+    APP_ERROR_CHECK(err_code);
+
+    err_code = nrf_ble_gatt_att_mtu_periph_set(&m_gatt, NRF_SDH_BLE_GATT_MAX_MTU_SIZE);
     APP_ERROR_CHECK(err_code);
 }
 
@@ -303,6 +387,47 @@ static void nrf_qwr_error_handler(uint32_t nrf_error)
 }
 
 
+/**@brief Function for handling the data from the Nordic UART Service.
+ *
+ * @details This function will process the data received from the Nordic UART BLE Service and send
+ *          it to the UART module.
+ *
+ * @param[in] p_evt       Nordic UART Service event.
+ */
+/**@snippet [Handling the data received over BLE] */
+static void nus_data_handler(ble_nus_evt_t * p_evt)
+{
+
+    if (p_evt->type == BLE_NUS_EVT_RX_DATA)
+    {
+        uint32_t err_code;
+
+        NRF_LOG_DEBUG("Received data from BLE NUS. Writing data on UART.");
+        NRF_LOG_HEXDUMP_DEBUG(p_evt->params.rx_data.p_data, p_evt->params.rx_data.length);
+
+        for (uint32_t i = 0; i < p_evt->params.rx_data.length; i++)
+        {
+            do
+            {
+                //err_code = app_uart_put(p_evt->params.rx_data.p_data[i]);
+                if ((err_code != NRF_SUCCESS) && (err_code != NRF_ERROR_BUSY))
+                {
+                    NRF_LOG_ERROR("Failed receiving NUS message. Error 0x%x. ", err_code);
+                    APP_ERROR_CHECK(err_code);
+                }
+            } while (err_code == NRF_ERROR_BUSY);
+        }
+        if (p_evt->params.rx_data.p_data[p_evt->params.rx_data.length - 1] == '\r')
+        {
+            //while (app_uart_put('\n') == NRF_ERROR_BUSY);
+        }
+    }
+
+}
+/**@snippet [Handling the data received over BLE] */
+
+
+
 /**@brief Function for initializing services that will be used by the application.
  *
  * @details Initialize the Battery and Device Information services.
@@ -312,12 +437,21 @@ static void services_init(void)
     ret_code_t         err_code;
     ble_bas_init_t     bas_init;
     ble_dis_init_t     dis_init;
+    ble_nus_init_t     nus_init;
     nrf_ble_qwr_init_t qwr_init = {0};
 
     // Initialize Queued Write Module.
     qwr_init.error_handler = nrf_qwr_error_handler;
 
     err_code = nrf_ble_qwr_init(&m_qwr, &qwr_init);
+    APP_ERROR_CHECK(err_code);
+
+    // Initialize NUS.
+    memset(&nus_init, 0, sizeof(nus_init));
+
+    nus_init.data_handler = nus_data_handler;
+
+    err_code = ble_nus_init(&m_nus, &nus_init);
     APP_ERROR_CHECK(err_code);
 
     // Initialize Battery Service.
@@ -365,11 +499,28 @@ static void sensor_simulator_init(void)
  */
 static void application_timers_start(void)
 {
+    ret_code_t         err_code;
+
     // Start application timers.
     if (pdPASS != xTimerStart(m_battery_timer, OSTIMER_WAIT_FOR_QUEUE))
     {
         APP_ERROR_HANDLER(NRF_ERROR_NO_MEM);
     }
+
+    /*if (pdPASS != xTimerStart(m_saadc_timer, OSTIMER_WAIT_FOR_QUEUE))
+    {
+        APP_ERROR_HANDLER(NRF_ERROR_NO_MEM);
+    }*/
+
+    /*if (pdPASS != xTimerStart(m_ext_sensors_low_duty_timer, OSTIMER_WAIT_FOR_QUEUE))
+    {
+        APP_ERROR_HANDLER(NRF_ERROR_NO_MEM);
+    }*/
+
+    //err_code = app_timer_start(m_ext_sensors_low_duty_timer, EXT_SENSORS_WAKEUP_SAMPLE_INTERVAL_TICKS, NULL);
+    //APP_ERROR_CHECK(err_code);
+
+    
 }
 
 
@@ -487,6 +638,7 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
     switch (p_ble_evt->header.evt_id)
     {
         case BLE_GAP_EVT_CONNECTED:
+            m_ble_connected_bool = true;
             NRF_LOG_INFO("Connected");
             err_code = bsp_indication_set(BSP_INDICATE_ADVERTISING_SLOW);
             APP_ERROR_CHECK(err_code);
@@ -496,6 +648,7 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
             break;
 
         case BLE_GAP_EVT_DISCONNECTED:
+            m_ble_connected_bool = false;
             NRF_LOG_INFO("Disconnected");
             m_conn_handle = BLE_CONN_HANDLE_INVALID;
             break;
@@ -658,8 +811,11 @@ static void advertising_init(void)
     init.advdata.name_type               = BLE_ADVDATA_FULL_NAME;
     init.advdata.include_appearance      = true;
     init.advdata.flags                   = BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE;
-    init.advdata.uuids_complete.uuid_cnt = sizeof(m_adv_uuids) / sizeof(m_adv_uuids[0]);
-    init.advdata.uuids_complete.p_uuids  = m_adv_uuids;
+    init.advdata.uuids_complete.uuid_cnt = 2;
+    init.advdata.uuids_complete.p_uuids  = &m_adv_uuids[0];
+
+    init.srdata.uuids_complete.uuid_cnt = 1;
+    init.srdata.uuids_complete.p_uuids  = &m_adv_uuids[2];
 
     init.config.ble_adv_fast_enabled  = true;
     init.config.ble_adv_fast_interval = APP_ADV_INTERVAL;
@@ -754,13 +910,158 @@ void vApplicationIdleHook( void )
 #endif
 }
 
-
 /**@brief Function for initializing the clock.
  */
 static void clock_init(void)
 {
     ret_code_t err_code = nrf_drv_clock_init();
     APP_ERROR_CHECK(err_code);
+    nrf_drv_clock_lfclk_request(NULL);
+}
+
+
+/**@brief Function for pinging the CCS811 for a measurement.
+ */
+static void ccs811_measure_task (void * pvParameter)
+{
+    UNUSED_PARAMETER(pvParameter);
+    while(1)
+    {
+        if(m_ble_connected_bool)
+        {
+            if(xSemaphoreTake(i2c_semaphore,CCS811_MEASURE_INTERVAL))
+            {
+                get_sensor_data(CCS811);
+                xSemaphoreGive(i2c_semaphore);
+            }
+        }
+        vTaskDelay(CCS811_MEASURE_INTERVAL);
+    }
+}
+
+
+/**@brief Function for pinging the BME280 for a measurement.
+ */
+static void bme280_measure_task (void * pvParameter)
+{
+    UNUSED_PARAMETER(pvParameter);
+    while(1)
+    {
+        if(m_ble_connected_bool)
+        {
+            if(xSemaphoreTake(i2c_semaphore,BME280_MEASURE_INTERVAL))
+            {
+                get_sensor_data(BME280);
+                xSemaphoreGive(i2c_semaphore);
+            }
+        }
+        vTaskDelay(BME280_MEASURE_INTERVAL);
+    }
+}
+
+
+/**@brief Function for pinging the MAX30105 for a measurement.
+ */
+static void max30105_measure_task (void * pvParameter)
+{
+    UNUSED_PARAMETER(pvParameter);
+    while(1)
+    {
+        if(m_ble_connected_bool)
+        {
+            if(xSemaphoreTake(i2c_semaphore,MAX30105_MEASURE_INTERVAL))
+            {
+                get_sensor_data(MAX30105);
+                xSemaphoreGive(i2c_semaphore);
+            }
+        }
+        vTaskDelay(MAX30105_MEASURE_INTERVAL);
+    }
+}
+
+
+/**@brief Function for pinging the ADXL362 for a measurement.
+ */
+static void adxl362_measure_task (void * pvParameter)
+{
+    UNUSED_PARAMETER(pvParameter);
+    while(1)
+    {
+        if(m_ble_connected_bool)
+        {
+            get_sensor_data(ADXL362);
+        }
+        vTaskDelay(ADXL362_MEASURE_INTERVAL);
+    }
+}
+
+
+/**@brief Function for initializeing external sensors.
+ */
+static void external_sensor_init(void)
+{
+    BaseType_t xReturned;
+
+    // initialize i2c + sensors
+    vband_sensor_init(BME280 | CCS811 | MAX30105 | ADXL362);
+
+    // start tasks for each sensor
+    xReturned = xTaskCreate(ccs811_measure_task, "CCS811", configMINIMAL_STACK_SIZE + 200, NULL, 1, &ccs811_measure_task_handle);
+    if (xReturned != pdPASS)
+    {
+        NRF_LOG_ERROR("CCS811 task not created.");
+        APP_ERROR_HANDLER(NRF_ERROR_NO_MEM);
+    }
+    xReturned = xTaskCreate(bme280_measure_task, "BME280", configMINIMAL_STACK_SIZE + 200, NULL, 1, &bme280_measure_task_handle);
+    if (xReturned != pdPASS)
+    {
+        NRF_LOG_ERROR("BME280 task not created.");
+        APP_ERROR_HANDLER(NRF_ERROR_NO_MEM);
+    }
+    xReturned = xTaskCreate(max30105_measure_task, "MAX30105", configMINIMAL_STACK_SIZE + 200, NULL, 1, &max30105_measure_task_handle);
+    if (xReturned != pdPASS)
+    {
+        NRF_LOG_ERROR("MAX30105 task not created.");
+        APP_ERROR_HANDLER(NRF_ERROR_NO_MEM);
+    }
+    xReturned = xTaskCreate(adxl362_measure_task, "ADXL362", configMINIMAL_STACK_SIZE + 200, NULL, 1, &adxl362_measure_task_handle);
+    if (xReturned != pdPASS)
+    {
+        NRF_LOG_ERROR("ADXL362 task not created.");
+        APP_ERROR_HANDLER(NRF_ERROR_NO_MEM);
+    }
+}
+
+
+static void saadc_sample_task (void * pvParameter)
+{
+    UNUSED_PARAMETER(pvParameter);
+    while(1)
+    {
+        // only sample the electrode adc if we're in a connected state
+        if (m_ble_connected_bool)
+        {
+            if(xSemaphoreTake(i2c_semaphore,SAADC_WAKEUP_SAMPLE_INTERVAL))
+            {
+                vband_saadc_sample_electrode_channels();
+                xSemaphoreGive(i2c_semaphore);
+            }
+        }
+        vTaskDelay(SAADC_WAKEUP_SAMPLE_INTERVAL);
+    }
+}
+
+static void saadc_init(void)
+{
+    BaseType_t xReturned;
+
+    // start tasks for each sensor
+    xReturned = xTaskCreate(saadc_sample_task, "SAADC", configMINIMAL_STACK_SIZE + 200, NULL, 1, &saadc_sample_timer_handle);
+    if (xReturned != pdPASS)
+    {
+        NRF_LOG_ERROR("SAADC task not created.");
+        APP_ERROR_HANDLER(NRF_ERROR_NO_MEM);
+    }
 }
 
 
@@ -770,9 +1071,16 @@ int main(void)
 {
     bool erase_bonds = true;
 
+    // Initialize semaphores
+    i2c_semaphore = xSemaphoreCreateMutex();
+
     // Initialize modules.
     log_init();
     clock_init();
+
+    // enable DCDCs to reduce power consumption
+    NRF_POWER->DCDCEN = 1;
+    NRF_POWER->DCDCEN0 = 1;
 
     // Do not start any interrupt that uses system functions before system initialisation.
     // The best solution is to start the OS before any other initalisation.
@@ -788,24 +1096,29 @@ int main(void)
     // Activate deep sleep mode.
     SCB->SCR |= SCB_SCR_SLEEPDEEP_Msk;
 
+    NRF_LOG_INFO("Reboot.");
+
     // Configure and initialize the BLE stack.
     ble_stack_init();
 
     // Initialize modules.
     timers_init();
-    //buttons_leds_init(&erase_bonds);
+    buttons_leds_init(&erase_bonds);
     gap_params_init();
     gatt_init();
-    advertising_init();
     services_init();
+    advertising_init();
     sensor_simulator_init();
     conn_params_init();
-    peer_manager_init();
-    application_timers_start();
-    adxl362_init();
-
+    //peer_manager_init();
+    application_timers_start(); // this includes the timer for the SAADC sampling, should only do this while connected (power saving)
+    
+    // added for VBAND functions
+    external_sensor_init();
+    saadc_init();
+    
     //set_buzzer_status(BUZZER_ON_WARNING);
-    set_buzzer_status(BUZZER_ON_ALARM);
+    //set_buzzer_status(BUZZER_ON_ALARM);
     //set_led_status(LED_BLE_CONNECTED);
 
     // Create a FreeRTOS task for the BLE stack.
