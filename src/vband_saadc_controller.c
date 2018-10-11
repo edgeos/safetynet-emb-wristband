@@ -162,7 +162,7 @@ static void vband_electrode_sample_rtc_handler(nrf_drv_rtc_int_type_t int_type)
         if (m_electrode_measurement_counter == NUM_MEASUREMENTS)
         {   
             m_adc_evt_counter++;
-            NRF_LOG_INFO("ADC event number: %d",(int)m_adc_evt_counter);
+            NRF_LOG_INFO("ADC event number: %d, AIN0 = %d, AIN4 = %d, AIN6 = %d",(int)m_adc_evt_counter,m_electrode_saadc_vals_temp[0][0],m_electrode_saadc_vals_temp[1][0],m_electrode_saadc_vals_temp[2][0]);
             m_electrode_measurement_counter = 0;
             m_electrode_measurement_in_progress = false;
             nrf_drv_rtc_disable(&rtc);

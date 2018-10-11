@@ -1002,7 +1002,7 @@ static void external_sensor_init(void)
 {
     BaseType_t xReturned;
 
-    // initialize i2c + sensors
+    // initialize i2c + spi sensors
     vband_sensor_init(BME280 | CCS811 | MAX30105 | ADXL362);
 
     // start tasks for each sensor
@@ -1039,7 +1039,7 @@ static void saadc_sample_task (void * pvParameter)
     while(1)
     {
         // only sample the electrode adc if we're in a connected state
-        if (m_ble_connected_bool)
+        if (1)//m_ble_connected_bool)
         {
             if(xSemaphoreTake(i2c_semaphore,SAADC_WAKEUP_SAMPLE_INTERVAL))
             {
@@ -1063,7 +1063,6 @@ static void saadc_init(void)
         APP_ERROR_HANDLER(NRF_ERROR_NO_MEM);
     }
 }
-
 
 /**@brief Function for application main entry.
  */
@@ -1118,7 +1117,7 @@ int main(void)
     saadc_init();
     
     //set_buzzer_status(BUZZER_ON_WARNING);
-    //set_buzzer_status(BUZZER_ON_ALARM);
+    set_buzzer_status(BUZZER_ON_ALARM);
     //set_led_status(LED_BLE_CONNECTED);
 
     // Create a FreeRTOS task for the BLE stack.

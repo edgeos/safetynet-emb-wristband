@@ -57,14 +57,17 @@ extern "C" {
 #define BSP_LED_0         17
 
 // Buttons definitions; needed for boards.c
-#define BUTTONS_NUMBER    0
+#define BUTTONS_NUMBER    1
 #define BUTTONS_ACTIVE_STATE 0
+#define BUTTON_1          11
+#define BUTTON_PULL    NRF_GPIO_PIN_PULLUP
+#define BUTTONS_LIST { BUTTON_1 }
 
 // Buzzer
 #define BUZZER_GPIO           NRF_GPIO_PIN_MAP(0,23)
 
 // Accelerometer ADXL362
-#define SPI_INSTANCE_ADXL362  0 /**< SPI instance index. */
+#define SPI_INSTANCE_ADXL362  1 /**< SPI instance index. */
 #define SPI_SCK_PIN_ADXL362   NRF_GPIO_PIN_MAP(0, 19)
 #define SPI_MISO_PIN_ADXL362  NRF_GPIO_PIN_MAP(0, 15)
 #define SPI_MOSI_PIN_ADXL362  NRF_GPIO_PIN_MAP(0, 17)

@@ -452,7 +452,7 @@
 // <e> BLE_NUS_ENABLED - ble_nus - Nordic UART Service
 //==========================================================
 #ifndef BLE_NUS_ENABLED
-#define BLE_NUS_ENABLED 0
+#define BLE_NUS_ENABLED 1
 #endif
 // <e> BLE_NUS_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
@@ -3126,7 +3126,7 @@
 // <e> NRFX_RTC_ENABLED - nrfx_rtc - RTC peripheral driver
 //==========================================================
 #ifndef NRFX_RTC_ENABLED
-#define NRFX_RTC_ENABLED 0
+#define NRFX_RTC_ENABLED 1
 #endif
 // <q> NRFX_RTC0_ENABLED  - Enable RTC0 instance
  
@@ -3146,7 +3146,7 @@
  
 
 #ifndef NRFX_RTC2_ENABLED
-#define NRFX_RTC2_ENABLED 0
+#define NRFX_RTC2_ENABLED 1
 #endif
 
 // <o> NRFX_RTC_MAXIMUM_LATENCY_US - Maximum possible time[us] in highest priority interrupt 
@@ -3239,7 +3239,7 @@
 // <e> NRFX_SAADC_ENABLED - nrfx_saadc - SAADC peripheral driver
 //==========================================================
 #ifndef NRFX_SAADC_ENABLED
-#define NRFX_SAADC_ENABLED 0
+#define NRFX_SAADC_ENABLED 1
 #endif
 // <o> NRFX_SAADC_CONFIG_RESOLUTION  - Resolution
  
@@ -3352,14 +3352,14 @@
  
 
 #ifndef NRFX_SPIM0_ENABLED
-#define NRFX_SPIM0_ENABLED 1
+#define NRFX_SPIM0_ENABLED 0
 #endif
 
 // <q> NRFX_SPIM1_ENABLED  - Enable SPIM1 instance
  
 
 #ifndef NRFX_SPIM1_ENABLED
-#define NRFX_SPIM1_ENABLED 0
+#define NRFX_SPIM1_ENABLED 1
 #endif
 
 // <q> NRFX_SPIM2_ENABLED  - Enable SPIM2 instance
@@ -3578,14 +3578,14 @@
  
 
 #ifndef NRFX_SPI0_ENABLED
-#define NRFX_SPI0_ENABLED 1
+#define NRFX_SPI0_ENABLED 0
 #endif
 
 // <q> NRFX_SPI1_ENABLED  - Enable SPI1 instance
  
 
 #ifndef NRFX_SPI1_ENABLED
-#define NRFX_SPI1_ENABLED 0
+#define NRFX_SPI1_ENABLED 1
 #endif
 
 // <q> NRFX_SPI2_ENABLED  - Enable SPI2 instance
@@ -3928,7 +3928,7 @@
 // <e> NRFX_TWIM_ENABLED - nrfx_twim - TWIM peripheral driver
 //==========================================================
 #ifndef NRFX_TWIM_ENABLED
-#define NRFX_TWIM_ENABLED 0
+#define NRFX_TWIM_ENABLED 1
 #endif
 // <q> NRFX_TWIM0_ENABLED  - Enable TWIM0 instance
  
@@ -5144,7 +5144,7 @@
 // <e> RTC_ENABLED - nrf_drv_rtc - RTC peripheral driver - legacy layer
 //==========================================================
 #ifndef RTC_ENABLED
-#define RTC_ENABLED 0
+#define RTC_ENABLED 1
 #endif
 // <o> RTC_DEFAULT_CONFIG_FREQUENCY - Frequency  <16-32768> 
 
@@ -5195,7 +5195,7 @@
  
 
 #ifndef RTC2_ENABLED
-#define RTC2_ENABLED 0
+#define RTC2_ENABLED 1
 #endif
 
 // <o> NRF_MAXIMUM_LATENCY_US - Maximum possible time[us] in highest priority interrupt 
@@ -5208,7 +5208,7 @@
 // <e> SAADC_ENABLED - nrf_drv_saadc - SAADC peripheral driver - legacy layer
 //==========================================================
 #ifndef SAADC_ENABLED
-#define SAADC_ENABLED 0
+#define SAADC_ENABLED 1
 #endif
 // <o> SAADC_CONFIG_RESOLUTION  - Resolution
  
@@ -5377,7 +5377,7 @@
 // <e> SPI0_ENABLED - Enable SPI0 instance
 //==========================================================
 #ifndef SPI0_ENABLED
-#define SPI0_ENABLED 1
+#define SPI0_ENABLED 0
 #endif
 // <q> SPI0_USE_EASY_DMA  - Use EasyDMA
  
@@ -5391,7 +5391,7 @@
 // <e> SPI1_ENABLED - Enable SPI1 instance
 //==========================================================
 #ifndef SPI1_ENABLED
-#define SPI1_ENABLED 0
+#define SPI1_ENABLED 1
 #endif
 // <q> SPI1_USE_EASY_DMA  - Use EasyDMA
  
@@ -5603,7 +5603,7 @@
 // <e> TWI_ENABLED - nrf_drv_twi - TWI/TWIM peripheral driver - legacy layer
 //==========================================================
 #ifndef TWI_ENABLED
-#define TWI_ENABLED 0
+#define TWI_ENABLED 1
 #endif
 // <o> TWI_DEFAULT_CONFIG_FREQUENCY  - Frequency
  
@@ -5619,14 +5619,14 @@
  
 
 #ifndef TWI_DEFAULT_CONFIG_CLR_BUS_INIT
-#define TWI_DEFAULT_CONFIG_CLR_BUS_INIT 0
+#define TWI_DEFAULT_CONFIG_CLR_BUS_INIT 1
 #endif
 
 // <q> TWI_DEFAULT_CONFIG_HOLD_BUS_UNINIT  - Enables bus holding after uninit
  
 
 #ifndef TWI_DEFAULT_CONFIG_HOLD_BUS_UNINIT
-#define TWI_DEFAULT_CONFIG_HOLD_BUS_UNINIT 0
+#define TWI_DEFAULT_CONFIG_HOLD_BUS_UNINIT 1
 #endif
 
 // <o> TWI_DEFAULT_CONFIG_IRQ_PRIORITY  - Interrupt priority
@@ -5649,13 +5649,13 @@
 // <e> TWI0_ENABLED - Enable TWI0 instance
 //==========================================================
 #ifndef TWI0_ENABLED
-#define TWI0_ENABLED 0
+#define TWI0_ENABLED 1
 #endif
 // <q> TWI0_USE_EASY_DMA  - Use EasyDMA (if present)
  
 
 #ifndef TWI0_USE_EASY_DMA
-#define TWI0_USE_EASY_DMA 0
+#define TWI0_USE_EASY_DMA 1
 #endif
 
 // </e>
@@ -12312,7 +12312,7 @@
 // <i> Requested BLE GAP data length to be negotiated.
 
 #ifndef NRF_SDH_BLE_GAP_DATA_LENGTH
-#define NRF_SDH_BLE_GAP_DATA_LENGTH 27
+#define NRF_SDH_BLE_GAP_DATA_LENGTH 251
 #endif
 
 // <o> NRF_SDH_BLE_PERIPHERAL_LINK_COUNT - Maximum number of peripheral links. 
@@ -12341,7 +12341,7 @@
 
 // <o> NRF_SDH_BLE_GATT_MAX_MTU_SIZE - Static maximum MTU size. 
 #ifndef NRF_SDH_BLE_GATT_MAX_MTU_SIZE
-#define NRF_SDH_BLE_GATT_MAX_MTU_SIZE 23
+#define NRF_SDH_BLE_GATT_MAX_MTU_SIZE 247
 #endif
 
 // <o> NRF_SDH_BLE_GATTS_ATTR_TAB_SIZE - Attribute Table size in bytes. The size must be a multiple of 4. 
@@ -12351,7 +12351,7 @@
 
 // <o> NRF_SDH_BLE_VS_UUID_COUNT - The number of vendor-specific UUIDs. 
 #ifndef NRF_SDH_BLE_VS_UUID_COUNT
-#define NRF_SDH_BLE_VS_UUID_COUNT 0
+#define NRF_SDH_BLE_VS_UUID_COUNT 1
 #endif
 
 // <q> NRF_SDH_BLE_SERVICE_CHANGED  - Include the Service Changed characteristic in the Attribute Table.
