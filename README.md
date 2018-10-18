@@ -45,3 +45,11 @@ Builds
 - After a successful compilation, the output files (hex, elf, etc)  will be placed in the folder below:
 
   $ROOT/target/<board>/<soft_device>/ses/Outputs
+
+ 
+Application
+===========
+
+The flow chart below gives a detailed overview of the embedded software operation:
+
+![alt text](https://github.com/edgeos/safetynet-emb-wristband/blob/master/misc/Voltage%20Band%20Sensor%20Flow%20Chart.png)
