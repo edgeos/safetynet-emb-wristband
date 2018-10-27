@@ -56,7 +56,8 @@ typedef enum
     ADXL362  = 1 << 0,
     BME280   = 1 << 1,
     CCS811   = 1 << 2,
-    MAX30105 = 1 << 3
+    MAX30105 = 1 << 3,
+    SIMULATE = 1 << 7
 } sensor_type_t;
 
 /**@brief Initialize External Sensor Interfaces
@@ -67,7 +68,7 @@ void vband_sensor_init(sensor_type_t use_sensors);
 /**@brief Initialize External Sensor Interfaces
  *
  */
-int8_t get_sensor_data(sensor_type_t get_sensor);
+int8_t get_sensor_data(sensor_type_t get_sensor, uint8_t * p_data, uint16_t * p_data_length);
 
 #ifdef __cplusplus
 }

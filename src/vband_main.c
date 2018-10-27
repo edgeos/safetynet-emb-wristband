@@ -59,7 +59,6 @@
 #include "ble_advertising.h"
 #include "ble_bas.h"
 #include "ble_dis.h"
-#include "ble_nus.h" // UART service
 #include "ble_conn_params.h"
 #include "sensorsim.h"
 #include "nrf_sdh.h"
@@ -85,6 +84,9 @@
 #include "nrf_log_ctrl.h"
 #include "nrf_log_default_backends.h"
 
+// custom BLE service
+#include "ble_vband_srv.h"
+
 // internal peripheral contollers
 #include "vband_pwm_controller.h"
 #include "vband_saadc_controller.h"
@@ -109,7 +111,7 @@
 
 #define DEVICE_NAME                         "GE GRC Wristband"                      /**< Name of device. Will be included in the advertising data. */
 #define MANUFACTURER_NAME                   "GE"                                    /**< Manufacturer. Will be passed to Device Information Service. */
-#define NUS_SERVICE_UUID_TYPE               BLE_UUID_TYPE_VENDOR_BEGIN              /**< UUID type for the Nordic UART Service (vendor specific). */
+#define VBAND_SERVICE_UUID_TYPE             BLE_UUID_TYPE_VENDOR_BEGIN              /**< UUID type for the Voltage Band Service (vendor specific). */
 
 #define APP_BLE_OBSERVER_PRIO               3                                       /**< Application's BLE observer priority. You shouldn't need to modify this value. */
 #define APP_BLE_CONN_CFG_TAG                1                                       /**< A tag identifying the SoftDevice BLE configuration. */
@@ -122,8 +124,8 @@
 #define MAX_BATTERY_LEVEL                   100                                     /**< Maximum simulated battery level. */
 #define BATTERY_LEVEL_INCREMENT             1                                       /**< Increment between each simulated battery level measurement. */
 
-#define MIN_CONN_INTERVAL                   MSEC_TO_UNITS(20, UNIT_1_25_MS)        /**< Minimum acceptable connection interval (0.4 seconds). */
-#define MAX_CONN_INTERVAL                   MSEC_TO_UNITS(75, UNIT_1_25_MS)        /**< Maximum acceptable connection interval (0.65 second). */
+#define MIN_CONN_INTERVAL                   MSEC_TO_UNITS(200, UNIT_1_25_MS)        /**< Minimum acceptable connection interval (0.4 seconds). */
+#define MAX_CONN_INTERVAL                   MSEC_TO_UNITS(400, UNIT_1_25_MS)        /**< Maximum acceptable connection interval (0.65 second). */
 #define SLAVE_LATENCY                       0                                       /**< Slave latency. */
 #define CONN_SUP_TIMEOUT                    MSEC_TO_UNITS(4000, UNIT_10_MS)         /**< Connection supervisory time-out (4 seconds). */
 
@@ -144,26 +146,28 @@
 
 #define OSTIMER_WAIT_FOR_QUEUE              2                                       /**< Number of ticks to wait for the timer queue to be ready */
 
-BLE_NUS_DEF(m_nus, NRF_SDH_BLE_TOTAL_LINK_COUNT);                   /**< BLE NUS service instance. */
+BLE_VBAND_SRV_DEF(m_vband);                                         /**< Voltage Band service instance. */
 BLE_BAS_DEF(m_bas);                                                 /**< Battery service instance. */
 NRF_BLE_GATT_DEF(m_gatt);                                           /**< GATT module instance. */
 NRF_BLE_QWR_DEF(m_qwr);                                             /**< Context for the Queued Write module.*/
 BLE_ADVERTISING_DEF(m_advertising);                                 /**< Advertising module instance. */
 
-static uint16_t m_conn_handle            = BLE_CONN_HANDLE_INVALID;                 /**< Handle of the current connection. */
-static uint16_t m_ble_nus_max_data_len   = BLE_GATT_ATT_MTU_DEFAULT - 3;            /**< Maximum length of data (in bytes) that can be transmitted to the peer by the Nordic UART service module. */
+static uint16_t m_conn_handle              = BLE_CONN_HANDLE_INVALID;                 /**< Handle of the current connection. */
+static uint16_t m_ble_vband_max_data_len   = BLE_GATT_ATT_MTU_DEFAULT - 3;            /**< Maximum length of data (in bytes) that can be transmitted to the peer by the Nordic UART service module. */
 
 static sensorsim_cfg_t   m_battery_sim_cfg;                         /**< Battery Level sensor simulator configuration. */
 static sensorsim_state_t m_battery_sim_state;                       /**< Battery Level sensor simulator state. */
 
 static bool m_ble_connected_bool = false;
 
+static ble_vband_srv_config_mode_t m_current_vband_mode = BLE_VBAND_SRV_MODE_NORMAL;
+
 
 static ble_uuid_t m_adv_uuids[] =                                   /**< Universally unique service identifiers. */
 {
     {BLE_UUID_BATTERY_SERVICE, BLE_UUID_TYPE_BLE},
     {BLE_UUID_DEVICE_INFORMATION_SERVICE, BLE_UUID_TYPE_BLE},
-    {BLE_UUID_NUS_SERVICE, NUS_SERVICE_UUID_TYPE}
+    {BLE_UUID_VOLTAGE_WRISTBAND_SERVICE, BLE_UUID_TYPE_BLE}
 };
 
 // FreeRTOS Timers
@@ -236,6 +240,24 @@ static void battery_level_update(void)
     battery_level = (uint8_t)sensorsim_measure(&m_battery_sim_state, &m_battery_sim_cfg);
 
     err_code = ble_bas_battery_level_update(&m_bas, battery_level, BLE_CONN_HANDLE_ALL);
+    if ((err_code != NRF_SUCCESS) &&
+        (err_code != NRF_ERROR_INVALID_STATE) &&
+        (err_code != NRF_ERROR_RESOURCES) &&
+        (err_code != NRF_ERROR_BUSY) &&
+        (err_code != BLE_ERROR_GATTS_SYS_ATTR_MISSING)
+       )
+    {
+        APP_ERROR_HANDLER(err_code);
+    }
+}
+
+/**@brief Function for sending Voltage Band data over BLE
+ */
+static void vband_characteristic_update(ble_vband_char_update_t char_update, uint8_t * p_data, uint16_t * p_length)
+{
+    ret_code_t err_code;
+
+    err_code = char_update(&m_vband, p_data, p_length, m_conn_handle); 
     if ((err_code != NRF_SUCCESS) &&
         (err_code != NRF_ERROR_INVALID_STATE) &&
         (err_code != NRF_ERROR_RESOURCES) &&
@@ -354,8 +376,8 @@ void gatt_evt_handler(nrf_ble_gatt_t * p_gatt, nrf_ble_gatt_evt_t const * p_evt)
 {
     if ((m_conn_handle == p_evt->conn_handle) && (p_evt->evt_id == NRF_BLE_GATT_EVT_ATT_MTU_UPDATED))
     {
-        m_ble_nus_max_data_len = p_evt->params.att_mtu_effective - OPCODE_LENGTH - HANDLE_LENGTH;
-        NRF_LOG_INFO("Data len is set to 0x%X(%d)", m_ble_nus_max_data_len, m_ble_nus_max_data_len);
+        m_ble_vband_max_data_len = p_evt->params.att_mtu_effective - 3;
+        NRF_LOG_INFO("Data len is set to 0x%X(%d)", m_ble_vband_max_data_len, m_ble_vband_max_data_len);
     }
     NRF_LOG_DEBUG("ATT MTU exchange completed. central 0x%x peripheral 0x%x",
                   p_gatt->att_mtu_desired_central,
@@ -387,40 +409,23 @@ static void nrf_qwr_error_handler(uint32_t nrf_error)
 }
 
 
-/**@brief Function for handling the data from the Nordic UART Service.
+/**@brief Function for handling the data from the Voltage Band Service.
  *
- * @details This function will process the data received from the Nordic UART BLE Service and send
- *          it to the UART module.
+ * @details This function will process the data received from the Voltage Band BLE Service
  *
- * @param[in] p_evt       Nordic UART Service event.
+ * @param[in] p_evt       Voltage Band Service event.
  */
 /**@snippet [Handling the data received over BLE] */
-static void nus_data_handler(ble_nus_evt_t * p_evt)
+static void vband_data_handler(ble_vband_srv_evt_t * p_evt)
 {
 
-    if (p_evt->type == BLE_NUS_EVT_RX_DATA)
+    if (p_evt->type == BLE_VBAND_SRV_EVT_CONFIG_UPDATED)
     {
         uint32_t err_code;
 
-        NRF_LOG_DEBUG("Received data from BLE NUS. Writing data on UART.");
-        NRF_LOG_HEXDUMP_DEBUG(p_evt->params.rx_data.p_data, p_evt->params.rx_data.length);
-
-        for (uint32_t i = 0; i < p_evt->params.rx_data.length; i++)
-        {
-            do
-            {
-                //err_code = app_uart_put(p_evt->params.rx_data.p_data[i]);
-                if ((err_code != NRF_SUCCESS) && (err_code != NRF_ERROR_BUSY))
-                {
-                    NRF_LOG_ERROR("Failed receiving NUS message. Error 0x%x. ", err_code);
-                    APP_ERROR_CHECK(err_code);
-                }
-            } while (err_code == NRF_ERROR_BUSY);
-        }
-        if (p_evt->params.rx_data.p_data[p_evt->params.rx_data.length - 1] == '\r')
-        {
-            //while (app_uart_put('\n') == NRF_ERROR_BUSY);
-        }
+        NRF_LOG_DEBUG("Received config update from BLE Voltage Band Service.");
+        //p_evt->params.config_data.op_mode
+        //p_evt->params.config_data.alarm_threshold
     }
 
 }
@@ -434,10 +439,10 @@ static void nus_data_handler(ble_nus_evt_t * p_evt)
  */
 static void services_init(void)
 {
-    ret_code_t         err_code;
-    ble_bas_init_t     bas_init;
-    ble_dis_init_t     dis_init;
-    ble_nus_init_t     nus_init;
+    ret_code_t             err_code;
+    ble_bas_init_t         bas_init;
+    ble_dis_init_t         dis_init;
+    ble_vband_srv_init_t   vband_init;
     nrf_ble_qwr_init_t qwr_init = {0};
 
     // Initialize Queued Write Module.
@@ -446,12 +451,12 @@ static void services_init(void)
     err_code = nrf_ble_qwr_init(&m_qwr, &qwr_init);
     APP_ERROR_CHECK(err_code);
 
-    // Initialize NUS.
-    memset(&nus_init, 0, sizeof(nus_init));
+    // Initialize Voltage Band Service.
+    memset(&vband_init, 0, sizeof(vband_init));
 
-    nus_init.data_handler = nus_data_handler;
+    vband_init.evt_handler = vband_data_handler;
 
-    err_code = ble_nus_init(&m_nus, &nus_init);
+    err_code = ble_vband_srv_init(&m_vband, &vband_init);
     APP_ERROR_CHECK(err_code);
 
     // Initialize Battery Service.
@@ -506,21 +511,6 @@ static void application_timers_start(void)
     {
         APP_ERROR_HANDLER(NRF_ERROR_NO_MEM);
     }
-
-    /*if (pdPASS != xTimerStart(m_saadc_timer, OSTIMER_WAIT_FOR_QUEUE))
-    {
-        APP_ERROR_HANDLER(NRF_ERROR_NO_MEM);
-    }*/
-
-    /*if (pdPASS != xTimerStart(m_ext_sensors_low_duty_timer, OSTIMER_WAIT_FOR_QUEUE))
-    {
-        APP_ERROR_HANDLER(NRF_ERROR_NO_MEM);
-    }*/
-
-    //err_code = app_timer_start(m_ext_sensors_low_duty_timer, EXT_SENSORS_WAKEUP_SAMPLE_INTERVAL_TICKS, NULL);
-    //APP_ERROR_CHECK(err_code);
-
-    
 }
 
 
@@ -924,6 +914,9 @@ static void clock_init(void)
  */
 static void ccs811_measure_task (void * pvParameter)
 {
+    static uint8_t p_data[20];
+    static uint16_t p_data_length;
+
     UNUSED_PARAMETER(pvParameter);
     while(1)
     {
@@ -931,7 +924,8 @@ static void ccs811_measure_task (void * pvParameter)
         {
             if(xSemaphoreTake(i2c_semaphore,CCS811_MEASURE_INTERVAL))
             {
-                get_sensor_data(CCS811);
+                get_sensor_data(CCS811, &p_data[0], &p_data_length);
+                vband_characteristic_update(ble_vband_srv_gas_sensor_update, &p_data[0], &p_data_length);
                 xSemaphoreGive(i2c_semaphore);
             }
         }
@@ -944,6 +938,9 @@ static void ccs811_measure_task (void * pvParameter)
  */
 static void bme280_measure_task (void * pvParameter)
 {
+    static uint8_t p_data[20];
+    static uint16_t p_data_length;
+
     UNUSED_PARAMETER(pvParameter);
     while(1)
     {
@@ -951,7 +948,8 @@ static void bme280_measure_task (void * pvParameter)
         {
             if(xSemaphoreTake(i2c_semaphore,BME280_MEASURE_INTERVAL))
             {
-                get_sensor_data(BME280);
+                get_sensor_data(BME280, &p_data[0], &p_data_length);
+                vband_characteristic_update(ble_vband_srv_temp_humid_pressure_update, &p_data[0], &p_data_length);
                 xSemaphoreGive(i2c_semaphore);
             }
         }
@@ -964,6 +962,9 @@ static void bme280_measure_task (void * pvParameter)
  */
 static void max30105_measure_task (void * pvParameter)
 {
+    static uint8_t p_data[20];
+    static uint16_t p_data_length;
+
     UNUSED_PARAMETER(pvParameter);
     while(1)
     {
@@ -971,7 +972,8 @@ static void max30105_measure_task (void * pvParameter)
         {
             if(xSemaphoreTake(i2c_semaphore,MAX30105_MEASURE_INTERVAL))
             {
-                get_sensor_data(MAX30105);
+                get_sensor_data(MAX30105, &p_data[0], &p_data_length);
+                vband_characteristic_update(ble_vband_srv_optical_sensor_update, &p_data[0], &p_data_length);
                 xSemaphoreGive(i2c_semaphore);
             }
         }
@@ -984,12 +986,16 @@ static void max30105_measure_task (void * pvParameter)
  */
 static void adxl362_measure_task (void * pvParameter)
 {
+    static uint8_t p_data[20];
+    static uint16_t p_data_length;
+
     UNUSED_PARAMETER(pvParameter);
     while(1)
     {
         if(m_ble_connected_bool)
         {
-            get_sensor_data(ADXL362);
+            get_sensor_data(ADXL362, &p_data[0], &p_data_length);
+            vband_characteristic_update(ble_vband_srv_accelerometer_update, &p_data[0], &p_data_length);
         }
         vTaskDelay(ADXL362_MEASURE_INTERVAL);
     }
@@ -1003,7 +1009,7 @@ static void external_sensor_init(void)
     BaseType_t xReturned;
 
     // initialize i2c + spi sensors
-    vband_sensor_init(BME280 | CCS811 | MAX30105 | ADXL362);
+    vband_sensor_init(BME280 | CCS811 | MAX30105 | ADXL362 | SIMULATE);
 
     // start tasks for each sensor
     xReturned = xTaskCreate(ccs811_measure_task, "CCS811", configMINIMAL_STACK_SIZE + 200, NULL, 1, &ccs811_measure_task_handle);
@@ -1035,11 +1041,14 @@ static void external_sensor_init(void)
 
 static void saadc_sample_task (void * pvParameter)
 {
+    static uint8_t * p_data;
+    static uint8_t * p_data_length;
+
     UNUSED_PARAMETER(pvParameter);
     while(1)
     {
         // only sample the electrode adc if we're in a connected state
-        if (1)//m_ble_connected_bool)
+        if (m_ble_connected_bool)
         {
             if(xSemaphoreTake(i2c_semaphore,SAADC_WAKEUP_SAMPLE_INTERVAL))
             {
@@ -1116,9 +1125,7 @@ int main(void)
     external_sensor_init();
     saadc_init();
     
-    //set_buzzer_status(BUZZER_ON_WARNING);
     set_buzzer_status(BUZZER_ON_ALARM);
-    //set_led_status(LED_BLE_CONNECTED);
 
     // Create a FreeRTOS task for the BLE stack.
     // The task will run advertising_start() before entering its loop.

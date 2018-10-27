@@ -346,7 +346,7 @@
  
 
 #ifndef BLE_HRS_ENABLED
-#define BLE_HRS_ENABLED 1
+#define BLE_HRS_ENABLED 0
 #endif
 
 // <q> BLE_HTS_ENABLED  - ble_hts - Health Thermometer Service
@@ -452,7 +452,7 @@
 // <e> BLE_NUS_ENABLED - ble_nus - Nordic UART Service
 //==========================================================
 #ifndef BLE_NUS_ENABLED
-#define BLE_NUS_ENABLED 1
+#define BLE_NUS_ENABLED 0
 #endif
 // <e> BLE_NUS_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
@@ -12404,6 +12404,10 @@
 
 #ifndef BLE_BAS_BLE_OBSERVER_PRIO
 #define BLE_BAS_BLE_OBSERVER_PRIO 2
+#endif
+
+#ifndef BLE_VBAND_SRV_BLE_OBSERVER_PRIO
+#define BLE_VBAND_SRV_BLE_OBSERVER_PRIO 2
 #endif
 
 // <o> BLE_BAS_C_BLE_OBSERVER_PRIO  

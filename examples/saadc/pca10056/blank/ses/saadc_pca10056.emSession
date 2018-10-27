@@ -59,17 +59,17 @@
   <Watches active="0" update="Never"/>
  </Watch4>
  <Files>
-  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="150" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../main.c" selected="0" top="128" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="7" y="143" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../main.c" selected="1" top="8" codecName="Default"/>
   <SessionOpenFile windowGroup="DockEditLeft" x="0" y="2155" useTextEdit="1" useBinaryEdit="0" left="0" path="../config/sdk_config.h" selected="0" top="2141" codecName="Default"/>
-  <SessionOpenFile windowGroup="DockEditLeft" x="37" y="84" useTextEdit="1" useBinaryEdit="0" left="0" path="saadc_pca10056.emProject" selected="1" top="42" codecName="Default"/>
-  <SessionOpenFile windowGroup="DockEditLeft" x="9" y="57" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../../nordic_sdk/components/libraries/util/sdk_common.h" selected="0" top="36" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="84" useTextEdit="1" useBinaryEdit="0" left="0" path="saadc_pca10056.emProject" selected="0" top="0" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="57" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../../nordic_sdk/components/libraries/util/sdk_common.h" selected="0" top="36" codecName="Default"/>
   <SessionOpenFile windowGroup="DockEditLeft" x="0" y="85" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../../nordic_sdk/integration/nrfx/legacy/nrf_drv_saadc.h" selected="0" top="64" codecName="Default"/>
   <SessionOpenFile windowGroup="DockEditLeft" x="0" y="88" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../../nordic_sdk/modules/nrfx/drivers/include/nrfx_saadc.h" selected="0" top="72" codecName="Default"/>
   <SessionOpenFile windowGroup="DockEditLeft" x="0" y="76" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../../nordic_sdk/modules/nrfx/hal/nrf_saadc.h" selected="0" top="56" codecName="Default"/>
   <SessionOpenFile windowGroup="DockEditLeft" x="0" y="112" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../../nordic_sdk/components/libraries/log/nrf_log.h" selected="0" top="92" codecName="Default"/>
-  <SessionOpenFile windowGroup="DockEditLeft" x="4" y="202" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../../nordic_sdk/components/libraries/log/src/nrf_log_internal.h" selected="0" top="181" codecName="Default"/>
-  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="405" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../../nordic_sdk/components/toolchain/cmsis/include/cmsis_gcc.h" selected="0" top="382" codecName=""/>
-  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="71" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../../nordic_sdk/modules/nrfx/mdk/ses_startup_nrf52840.s" selected="0" top="48" codecName=""/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="202" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../../nordic_sdk/components/libraries/log/src/nrf_log_internal.h" selected="0" top="181" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="405" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../../nordic_sdk/components/toolchain/cmsis/include/cmsis_gcc.h" selected="0" top="382" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="71" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../../nordic_sdk/modules/nrfx/mdk/ses_startup_nrf52840.s" selected="0" top="48" codecName="Default"/>
  </Files>
- <ARMCrossStudioWindow activeProject="saadc_pca10056" fileDialogDefaultFilter="*.c" autoConnectTarget="J-Link" buildConfiguration="Release" debugSearchFileMap="" fileDialogInitialDirectory="" debugSearchPath="" autoConnectCapabilities="3711"/>
+ <ARMCrossStudioWindow activeProject="saadc_pca10056" fileDialogDefaultFilter="*.c" autoConnectTarget="J-Link" buildConfiguration="Release" debugSearchFileMap="" fileDialogInitialDirectory="" debugSearchPath="" autoConnectCapabilities="3199"/>
 </session>

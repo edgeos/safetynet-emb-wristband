@@ -158,6 +158,7 @@
       <file file_name="$(NRF_SDK_DIR)/components/ble/ble_services/ble_bas/ble_bas.c" />
       <file file_name="$(NRF_SDK_DIR)/components/ble/ble_services/ble_dis/ble_dis.c" />
       <file file_name="$(NRF_SDK_DIR)/components/ble/ble_services/ble_nus/ble_nus.c" />
+      <file file_name="../../../../src/ble_vband_srv.c" />
     </folder>
     <folder Name="nRF_SoftDevice">
       <file file_name="$(NRF_SDK_DIR)/components/softdevice/common/nrf_sdh.c" />

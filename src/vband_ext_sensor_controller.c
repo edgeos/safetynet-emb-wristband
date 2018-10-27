@@ -34,6 +34,8 @@
 #define INT_PIN             NRF_GPIO_PIN_MAP(1,7)     // Data ready (active low)
 #endif
 
+static bool simulate_on = false;
+
 struct bme280_dev i2c_dev_bme280;
 struct ccs811_dev i2c_dev_ccs811;
 struct max30105_dev i2c_dev_max301015;
@@ -158,7 +160,7 @@ static void print_sensor_data(struct bme280_data *comp_data)
         NRF_LOG_INFO("%0.2f, %0.2f, %0.2f\r\n",comp_data->temperature, comp_data->pressure, comp_data->humidity);
 #else
         //NRF_LOG_INFO("\n")
-        NRF_LOG_INFO("Temp:  %ld, Humid:  %ld  \r",comp_data->temperature, comp_data->humidity);
+        NRF_LOG_INFO("Temp:  %ld, Humid:  %ld, Pressure:  %ld  \r",comp_data->temperature, comp_data->humidity, comp_data->pressure);
 #endif
 }
 
@@ -182,26 +184,48 @@ static void sensor_bme280_init(void)
     }
 }
 
-static int8_t bme280_stream_sensor_data_forced_mode(struct bme280_dev *dev)
+static int8_t bme280_stream_sensor_data_forced_mode(struct bme280_dev *dev, uint8_t * p_data, uint16_t * p_data_length)
 {
+    static uint8_t data_buffer[20];
+    static uint16_t data_buffer_length;
+
     int8_t rslt;
     uint8_t settings_sel;
-    struct bme280_data comp_data;
+    static struct bme280_data comp_data = {0};
     static bool prepare_measurement = true; // because of the delay for the measurement to complete we toggle what we do
 
-    /* Recommended mode of operation: Humidity Sensing (p17 of datasheet) */
-    dev->settings.osr_h = BME280_OVERSAMPLING_1X;
-    dev->settings.osr_p = BME280_NO_OVERSAMPLING;
-    dev->settings.osr_t = BME280_OVERSAMPLING_1X;
-    dev->settings.filter = BME280_FILTER_COEFF_OFF;
-    settings_sel = BME280_OSR_TEMP_SEL | BME280_OSR_HUM_SEL;
-    rslt = bme280_set_sensor_settings(settings_sel, dev);
+    if (!simulate_on)
+    {
+        /* Recommended mode of operation: Humidity Sensing (p17 of datasheet) */
+        dev->settings.osr_h = BME280_OVERSAMPLING_1X;
+        dev->settings.osr_p = BME280_NO_OVERSAMPLING;
+        dev->settings.osr_t = BME280_OVERSAMPLING_1X;
+        dev->settings.filter = BME280_FILTER_COEFF_OFF;
+        settings_sel = BME280_OSR_TEMP_SEL | BME280_OSR_HUM_SEL;
+        rslt = bme280_set_sensor_settings(settings_sel, dev);
 
-    /* Ping for sensor data */
-    rslt = bme280_set_sensor_mode(BME280_FORCED_MODE, dev);
-    nrf_delay_ms(20); // measurement time
-    rslt = bme280_get_sensor_data(BME280_ALL, &comp_data, dev);
+        /* Ping for sensor data */
+        rslt = bme280_set_sensor_mode(BME280_FORCED_MODE, dev);
+        nrf_delay_ms(20); // measurement time
+        rslt = bme280_get_sensor_data(BME280_ALL, &comp_data, dev);
+    }
+    else
+    {
+        comp_data.temperature++;
+        comp_data.humidity++;
+        comp_data.pressure++;
+    }
     print_sensor_data(&comp_data);
+
+    // package for BLE
+    memcpy(&data_buffer[0], &comp_data.temperature, sizeof(comp_data.temperature));
+    memcpy(&data_buffer[2], &comp_data.humidity, sizeof(comp_data.humidity));
+    memcpy(&data_buffer[4], &comp_data.pressure, sizeof(comp_data.pressure));
+    data_buffer_length = 6;
+
+    // assign pointers
+    memcpy(p_data, &data_buffer[0], data_buffer_length);
+    *p_data_length = data_buffer_length;
 
     return rslt;
 }
@@ -235,26 +259,44 @@ static void sensor_max30105_init(void)
     }
 }
 
-static void get_max30105_status(void)
+static void get_max30105_status(uint8_t * p_data, uint16_t * p_data_length)
 {
+    static uint8_t data_buffer[20];
+    static uint16_t data_buffer_length;
+
     static bool prox_detected = false;
-    if (MAX30105_getIntr1() & INTR_PROX) // if the proximity interrupt occurs
-    { 
-        if (!prox_detected) 
-        {
-            NRF_LOG_INFO("Proximity detected!");
-        }
-        MAX30105_writeReg(REG_MODE_CONFIG, MODE_1LED); // go back into proximity detection
-        prox_detected = true;
-    } 
-    else 
+    if (!simulate_on)
     {
-        if (prox_detected) 
+        if (MAX30105_getIntr1() & INTR_PROX) // if the proximity interrupt occurs
+        { 
+            if (!prox_detected) 
+            {
+                NRF_LOG_INFO("Proximity detected!");
+            }
+            MAX30105_writeReg(REG_MODE_CONFIG, MODE_1LED); // go back into proximity detection
+            prox_detected = true;
+        } 
+        else 
         {
-          NRF_LOG_INFO("Proximity not detected!");
+            if (prox_detected) 
+            {
+              NRF_LOG_INFO("Proximity not detected!");
+            }
+            prox_detected = false;
         }
-        prox_detected = false;
     }
+    else
+    {
+        prox_detected = !prox_detected;
+    }
+
+    // package for BLE
+    memcpy(&data_buffer[0], &prox_detected, sizeof(prox_detected));
+    data_buffer_length = 1;
+
+    // assign pointers
+    memcpy(p_data, &data_buffer[0], data_buffer_length);
+    *p_data_length = data_buffer_length;
 }
 
 
@@ -278,14 +320,31 @@ static void sensor_ccs811_init(void)
     }
 }
 
-static void get_ccs811_measurement(void)
+static void get_ccs811_measurement(uint8_t * p_data, uint16_t * p_data_length)
 {
-    uint16_t eCO2 = 0;
-    uint16_t TVOC = 0;
-    if(ccs811_measure(&i2c_dev_ccs811, &eCO2, &TVOC))
+    static uint8_t data_buffer[20];
+    static uint16_t data_buffer_length;
+    
+    static uint16_t eCO2 = 0;
+    static uint16_t TVOC = 0;
+    if (!simulate_on)
     {
-        NRF_LOG_INFO("CO2:  %d  , TVOC:  %d  \r", eCO2, TVOC);
+        ccs811_measure(&i2c_dev_ccs811, &eCO2, &TVOC);
     }
+    {
+        eCO2++;
+        TVOC++;
+    }
+    NRF_LOG_INFO("CO2:  %d  , TVOC:  %d  \r", eCO2, TVOC);
+
+    // package for BLE
+    memcpy(&data_buffer[0], &eCO2, sizeof(eCO2));
+    memcpy(&data_buffer[2], &TVOC, sizeof(TVOC));
+    data_buffer_length = 4;
+
+    // assign pointers
+    memcpy(p_data, &data_buffer[0], data_buffer_length);
+    *p_data_length = data_buffer_length;
 }
 
 static void sensor_adxl362_init(void)
@@ -303,13 +362,36 @@ static void sensor_adxl362_init(void)
     }
 }
 
-static void get_adxl362_measurement(void)
+static void get_adxl362_measurement(uint8_t * p_data, uint16_t * p_data_length)
 {
-    int16_t xdata = 0;
-    int16_t ydata = 0;
-    int16_t zdata = 0;
-    ADXL362_GetXyz(&xdata,&ydata,&zdata);
+    static uint8_t data_buffer[20];
+    static uint16_t data_buffer_length;
+
+    static int16_t xdata = 0;
+    static int16_t ydata = 0;
+    static int16_t zdata = 0;
+    if (!simulate_on)
+    {
+        ADXL362_GetXyz(&xdata,&ydata,&zdata);
+    }
+    else
+    {
+        xdata++;
+        ydata++;
+        zdata++;
+    }
+
     NRF_LOG_INFO("x:  %d  , y:  %d  , z:  %d\r", xdata, ydata, zdata);
+
+    // package for BLE
+    memcpy(&data_buffer[0], &xdata, sizeof(xdata));
+    memcpy(&data_buffer[2], &ydata, sizeof(ydata));
+    memcpy(&data_buffer[4], &zdata, sizeof(zdata));
+    data_buffer_length = 6;
+
+    // assign pointers
+    memcpy(p_data, &data_buffer[0], data_buffer_length);
+    *p_data_length = data_buffer_length;
 }
 
 
@@ -318,46 +400,56 @@ void vband_sensor_init(sensor_type_t use_sensors)
     int8_t rslt_bme280 = BME280_OK;
     int8_t rslt_max30105 = BME280_OK;
     
-    twi_init();
-    if(use_sensors & MAX30105)
+    if (use_sensors & SIMULATE)
     {
-        sensor_max30105_init();
+        simulate_on = true;
     }
-    if(use_sensors & CCS811)
-    {     
-        sensor_ccs811_init();
-    }
-    if(use_sensors & BME280)
-    {  
-        sensor_bme280_init();
-    }   
-    if(use_sensors & ADXL362)
+    else
     {
-        sensor_adxl362_init();
+        twi_init();
+        if(use_sensors & MAX30105)
+        {
+            sensor_max30105_init();
+        }
+        if(use_sensors & CCS811)
+        {     
+            sensor_ccs811_init();
+        }
+        if(use_sensors & BME280)
+        {  
+            sensor_bme280_init();
+        }   
+        if(use_sensors & ADXL362)
+        {
+            sensor_adxl362_init();
+        }
     }
 }
 
-int8_t get_sensor_data(sensor_type_t get_sensor)
+int8_t get_sensor_data(sensor_type_t get_sensor, uint8_t * p_data, uint16_t * p_data_length)
 {
     int8_t ret_code = 0;
 
     // check if sensor is enabled
-    if (!(enabled_sensors & get_sensor)) return 1;
+    if (!simulate_on)
+    {
+        if (!(enabled_sensors & get_sensor)) return 1;
+    }
 
     // query by sensor type
     switch(get_sensor) 
     {
         case ADXL362:
-            get_adxl362_measurement();
+            get_adxl362_measurement(p_data, p_data_length);
             break;
         case BME280:
-            bme280_stream_sensor_data_forced_mode(&i2c_dev_bme280);
+            bme280_stream_sensor_data_forced_mode(&i2c_dev_bme280, p_data, p_data_length);
             break;
         case CCS811:
-            get_ccs811_measurement();
+            get_ccs811_measurement(p_data, p_data_length);
             break;
         case MAX30105:
-            get_max30105_status();
+            get_max30105_status(p_data, p_data_length);
             break;
         default:
             break;
