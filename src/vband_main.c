@@ -91,6 +91,7 @@
 #include "vband_pwm_controller.h"
 #include "vband_saadc_controller.h"
 #include "vband_ext_sensor_controller.h"
+#include "voltage_alarm_algorithm.h"
 
 // external sensors
 #include "ccs811.h"
@@ -98,7 +99,7 @@
 #include "ADXL362.h"
 #include "MAX30105.h"
 
-#define SAADC_WAKEUP_SAMPLE_INTERVAL              1000                                    /**< SAADC measurement interval (ms). */
+#define SAADC_WAKEUP_SAMPLE_INTERVAL              500                                    /**< SAADC measurement interval (ms). */
 
 // defines for ext sensors, the first SAMPLE_INTERVAL defines how often we wake up, the
 // MEASURE_INTERVALs should be a multiple of the SAMPLE_INTERVAL
@@ -106,7 +107,8 @@
 #define EXT_SENSORS_WAKEUP_SAMPLE_INTERVAL_TICKS  APP_TIMER_TICKS(100)
 #define CCS811_MEASURE_INTERVAL                   1000                                    /**< CCS811 measurement interval (ms). */
 #define BME280_MEASURE_INTERVAL                   1000                                    /**< BME280 measurement interval (ms). */
-#define MAX30105_MEASURE_INTERVAL                 100                                     /**< MAX30105 measurement interval (ms). */
+#define MAX30105_MEASURE_PROXIMITY_INTERVAL       250                                     /**< MAX30105 proximity measurement interval (ms). */
+#define MAX30105_MEASURE_HEART_RATE_INTERVAL      15                                      /**< MAX30105 proximity measurement interval (ms). */
 #define ADXL362_MEASURE_INTERVAL                  75                                      /**< MAX30105 measurement interval (ms). */
 
 #define DEVICE_NAME                         "GE GRC Wristband"                      /**< Name of device. Will be included in the advertising data. */
@@ -964,20 +966,35 @@ static void max30105_measure_task (void * pvParameter)
 {
     static uint8_t p_data[20];
     static uint16_t p_data_length;
+    static max30105_state_t current_state = PRESENCE_NOT_DETECTED;
+    static uint16_t thread_interval = MAX30105_MEASURE_PROXIMITY_INTERVAL;
 
     UNUSED_PARAMETER(pvParameter);
     while(1)
     {
         if(m_ble_connected_bool)
         {
-            if(xSemaphoreTake(i2c_semaphore,MAX30105_MEASURE_INTERVAL))
+            if(xSemaphoreTake(i2c_semaphore,thread_interval))
             {
                 get_sensor_data(MAX30105, &p_data[0], &p_data_length);
+                /*if(p_data[0] != current_state)
+                {
+                    current_state = p_data[0];
+                    if(current_state == PRESENCE_DETECTED)
+                    {
+                        thread_interval = MAX30105_MEASURE_HEART_RATE_INTERVAL;
+                    }
+                    else
+                    {
+                        thread_interval = MAX30105_MEASURE_PROXIMITY_INTERVAL;
+                    }
+                }*/
+
                 vband_characteristic_update(ble_vband_srv_optical_sensor_update, &p_data[0], &p_data_length);
                 xSemaphoreGive(i2c_semaphore);
             }
         }
-        vTaskDelay(MAX30105_MEASURE_INTERVAL);
+        vTaskDelay(thread_interval);
     }
 }
 
@@ -1009,7 +1026,9 @@ static void external_sensor_init(void)
     BaseType_t xReturned;
 
     // initialize i2c + spi sensors
-    vband_sensor_init(BME280 | CCS811 | MAX30105 | ADXL362 | SIMULATE);
+    vband_sensor_init(BME280 | CCS811 | MAX30105 | ADXL362);
+    //vband_sensor_init(BME280 | CCS811 | MAX30105 | ADXL362 | SIMULATE);
+    //vband_sensor_init(MAX30105);
 
     // start tasks for each sensor
     xReturned = xTaskCreate(ccs811_measure_task, "CCS811", configMINIMAL_STACK_SIZE + 200, NULL, 1, &ccs811_measure_task_handle);
@@ -1048,7 +1067,7 @@ static void saadc_sample_task (void * pvParameter)
     while(1)
     {
         // only sample the electrode adc if we're in a connected state
-        if (m_ble_connected_bool)
+        if (1)//m_ble_connected_bool)
         {
             if(xSemaphoreTake(i2c_semaphore,SAADC_WAKEUP_SAMPLE_INTERVAL))
             {
@@ -1060,9 +1079,17 @@ static void saadc_sample_task (void * pvParameter)
     }
 }
 
+static void saadc_run_voltage_alarm_algorithm(float * adc_ch1, float * adc_ch2, float * adc_ch3, uint16_t len)
+{
+    static voltage_algorithm_results results;
+    check_for_voltage_detection(&results, adc_ch1, adc_ch2, adc_ch3, len);
+}
+
 static void saadc_init(void)
 {
     BaseType_t xReturned;
+    
+    saadc_assign_callback_fn(saadc_run_voltage_alarm_algorithm);
 
     // start tasks for each sensor
     xReturned = xTaskCreate(saadc_sample_task, "SAADC", configMINIMAL_STACK_SIZE + 200, NULL, 1, &saadc_sample_timer_handle);
@@ -1125,7 +1152,7 @@ int main(void)
     external_sensor_init();
     saadc_init();
     
-    set_buzzer_status(BUZZER_ON_ALARM);
+    //set_buzzer_status(BUZZER_ON_ALARM);
 
     // Create a FreeRTOS task for the BLE stack.
     // The task will run advertising_start() before entering its loop.

@@ -367,3 +367,15 @@ int MAX30105_softReset()
     _proxIntThreshold = 0x00;
     return MAX30105_NO_ERROR;
 }
+
+//******************************************************************************
+int MAX30105_clearFIFO() 
+{
+    if(MAX30105_writeReg(REG_FIFO_WR_PTR,0x00) != MAX30105_NO_ERROR) // INTR setting
+        return MAX30105_ERROR;
+    if(MAX30105_writeReg(REG_OVF_COUNTER,0x00) != MAX30105_NO_ERROR)
+        return MAX30105_ERROR;
+    if(MAX30105_writeReg(REG_FIFO_RD_PTR,0x00) != MAX30105_NO_ERROR)  //FIFO_WR_PTR[4:0]
+        return MAX30105_ERROR;
+    return MAX30105_NO_ERROR;
+}

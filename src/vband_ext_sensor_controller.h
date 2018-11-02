@@ -47,18 +47,23 @@
 extern "C" {
 #endif
 
-/**@brief Buzzer status.
- *
- * @details Different buzzer states depending on alarm algorithm
- */
+/**@brief Sensor Types */
 typedef enum
 {
     ADXL362  = 1 << 0,
     BME280   = 1 << 1,
     CCS811   = 1 << 2,
     MAX30105 = 1 << 3,
-    SIMULATE = 1 << 7
+    SIMULATE = 1 << 7,
 } sensor_type_t;
+
+/**@brief Sensor Types */
+typedef enum
+{
+    PRESENCE_NOT_DETECTED = 0,
+    PRESENCE_DETECTED = 1,
+} max30105_state_t;
+
 
 /**@brief Initialize External Sensor Interfaces
  *

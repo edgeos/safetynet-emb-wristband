@@ -19,6 +19,7 @@
 #include "ADXL362.h"
 #include "MAX30105.h"
 #include "vband_ext_sensor_controller.h"
+#include "heart_rate_detector.h"
 
 #include "nrf_log.h"
 #include "nrf_log_ctrl.h"
@@ -49,6 +50,10 @@ static const nrf_drv_twi_t m_twi = NRF_DRV_TWI_INSTANCE(0);
 static volatile bool m_xfer_done1 = false;
 /* I2C enable bool */
 static volatile bool twi_enabled = false;
+
+// track Optical sensor state
+static max30105_state_t max301015_state = PRESENCE_NOT_DETECTED;
+static uint32_t hr_ticks = 0;
 
 /**
  * @brief TWI events handler.
@@ -240,6 +245,17 @@ static void max30105_setup_proximity_sensing(void)
     MAX30105_wakeUp();        // exit shutdown to start sensing
 }
 
+static void max30105_setup_heart_rate_sensing(void)
+{
+    MAX30105_softReset(); // reset the MAX30105
+    MAX30105_shutDown();  // shut down while configuring
+    MAX30105_enableIntr(INTR_DATA_RDY | INTR_PROX);  // enable proximity interrupt
+    MAX30105_setProx(0x40, PROX_THRESHOLD);    // set proximity pulse amplitude and threshold
+    MAX30105_setDualLED(SMP_AVE_4, true, FIFO_A_FULL_F, ADC_RGE_01, SMP_RT_200, LED_PW_18BIT, MAX30105_HR_SENSE_RED_PA, MAX30105_HR_SENSE_IR_PA);
+    MAX30105_clearFIFO(); // clear FIFO before sampling start
+    MAX30105_wakeUp();        // exit shutdown to start sensing
+}
+
 static void sensor_max30105_init(void) 
 {
     i2c_dev_max301015.dev_id = MAX30105_I2C_ADDR;
@@ -259,46 +275,86 @@ static void sensor_max30105_init(void)
     }
 }
 
+static max30105_state_t get_max30105_presence(void)
+{
+    static max30105_state_t prox_detected = PRESENCE_NOT_DETECTED;
+    if (MAX30105_getIntr1() & INTR_PROX) // if the proximity interrupt occurs
+    { 
+        if (!prox_detected) 
+        {
+            NRF_LOG_INFO("Proximity detected!");
+        }
+        MAX30105_writeReg(REG_MODE_CONFIG, MODE_1LED); // go back into proximity detection
+        prox_detected = PRESENCE_DETECTED;
+    } 
+    else 
+    {
+        if (prox_detected) 
+        {
+          NRF_LOG_INFO("Proximity not detected!");
+        }
+        prox_detected = PRESENCE_NOT_DETECTED;
+    }
+    return prox_detected;
+}
+
+static void get_max30105_heart_rate(uint8_t *heart_rate)
+{
+    uint32_t redLED = 0;
+    uint32_t irLED = 0;
+    if (MAX30105_getIntr1() & INTR_DATA_RDY) // if the proximity interrupt occurs
+    {
+        MAX30105_readFIFO(&redLED, &irLED);
+        update_beat_timer(++hr_ticks, 20);
+        get_hr_bpm(heart_rate, &irLED);
+        NRF_LOG_INFO("red LED:  %ld, IR LED:  %ld, Avg BPM:  %d, Time:   %ld \r", redLED, irLED, *heart_rate, hr_ticks*20);
+    }
+}
+
 static void get_max30105_status(uint8_t * p_data, uint16_t * p_data_length)
 {
     static uint8_t data_buffer[20];
     static uint16_t data_buffer_length;
+    static uint8_t heart_rate = 0;
 
-    static bool prox_detected = false;
     if (!simulate_on)
     {
-        if (MAX30105_getIntr1() & INTR_PROX) // if the proximity interrupt occurs
-        { 
-            if (!prox_detected) 
-            {
-                NRF_LOG_INFO("Proximity detected!");
-            }
-            MAX30105_writeReg(REG_MODE_CONFIG, MODE_1LED); // go back into proximity detection
-            prox_detected = true;
-        } 
-        else 
+        max301015_state = get_max30105_presence();
+        /*
+        if(max301015_state == PRESENCE_NOT_DETECTED)
         {
-            if (prox_detected) 
+            max301015_state = get_max30105_presence();
+            if(max301015_state == PRESENCE_DETECTED)
             {
-              NRF_LOG_INFO("Proximity not detected!");
+                max30105_setup_heart_rate_sensing();
+                hr_ticks = 0;
+                reset_beat_timer();
             }
-            prox_detected = false;
         }
+        else
+        {
+           get_max30105_heart_rate(&heart_rate);
+           //max301015_state = get_max30105_presence();
+           if(max301015_state == PRESENCE_NOT_DETECTED)
+           {
+                max30105_setup_proximity_sensing();
+           }
+        }*/
     }
     else
     {
-        prox_detected = !prox_detected;
+        max301015_state = !max301015_state;
     }
 
     // package for BLE
-    memcpy(&data_buffer[0], &prox_detected, sizeof(prox_detected));
-    data_buffer_length = 1;
+    memcpy(&data_buffer[0], &max301015_state, sizeof(max301015_state));
+    memcpy(&data_buffer[1], &heart_rate, sizeof(heart_rate));
+    data_buffer_length = sizeof(max301015_state) + sizeof(heart_rate);
 
     // assign pointers
     memcpy(p_data, &data_buffer[0], data_buffer_length);
     *p_data_length = data_buffer_length;
 }
-
 
 static void sensor_ccs811_init(void)
 {

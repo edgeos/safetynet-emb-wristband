@@ -49,6 +49,8 @@
 
 #define MAX30105_DEFAULT_LED_PA 0x20
 #define MAX30105_DEFAULT_PILOT_PA 0x40
+#define MAX30105_HR_SENSE_IR_PA 0x1F
+#define MAX30105_HR_SENSE_RED_PA 0x0A
 
 /**
  * MAX30105 Optical Sensor
@@ -437,5 +439,12 @@ int MAX30105_writeReg(registers_t reg, char value);
      * @returns 0 if no errors, -1 if error.
     */
 int MAX30105_readReg(registers_t reg, char *value);
+
+/**
+     * @brief   Clear FIFO
+     * @details Clears the FIFO
+     * @returns 0 if no errors, -1 if error.
+    */
+int MAX30105_clearFIFO(void); 
 
 #endif /* _MAX30105_H_ */

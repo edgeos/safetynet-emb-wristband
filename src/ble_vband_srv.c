@@ -8,6 +8,9 @@
 #include "nrf_log.h"
 
 
+#define OPCODE_LENGTH 1                                                             /**< Length of opcode inside Running Speed and Cadence Measurement packet. */
+#define HANDLE_LENGTH 2                                                             /**< Length of handle inside Running Speed and Cadence Measurement packet. */
+
 /**@brief Function for handling the @ref BLE_GATTS_EVT_WRITE event from the SoftDevice.
  *
  * @param[in] p_vband_srv     Voltage Band Service structure.

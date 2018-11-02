@@ -49,6 +49,20 @@
 extern "C" {
 #endif
 
+/*!
+ * @brief Type definitions
+ */
+typedef void (*saadc_finished_fnptr_t)(float * adc_ch1, 
+                                       float * adc_ch2, 
+                                       float * adc_ch3,
+                                       uint16_t len);
+
+/**@brief Assign callback to main file
+ *
+ */
+void saadc_assign_callback_fn(saadc_finished_fnptr_t fn);
+
+
 /**@brief Take samples
  *
  */
