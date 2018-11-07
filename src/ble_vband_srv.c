@@ -200,7 +200,7 @@ uint32_t ble_vband_srv_init(ble_vband_srv_t * p_vband_srv, ble_vband_srv_init_t 
     memset(&add_char_params, 0, sizeof(add_char_params));
     add_char_params.uuid                     = VOLTAGE_ALARM_STATE_CHAR_UUID;
     add_char_params.uuid_type                = p_vband_srv->uuid_type;
-    add_char_params.max_len                  = BLE_VBAND_NORMAL_DATA_LEN;
+    add_char_params.max_len                  = BLE_VBAND_MAX_DATA_LEN;
     add_char_params.init_len                 = sizeof(uint8_t);
     add_char_params.is_var_len               = true;
     add_char_params.char_props.read          = 1;

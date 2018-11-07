@@ -76,12 +76,12 @@ static void saadc_electrode_callback(nrf_drv_saadc_evt_t const * p_event)
         m_electrode_measurement_counter++;
 
         // turn off SAADC
-        nrf_drv_saadc_uninit();                                                                   //Unintialize SAADC to disable EasyDMA and save power
+        //nrf_drv_saadc_uninit();                                                                   //Unintialize SAADC to disable EasyDMA and save power
         NRF_SAADC->INTENCLR = (SAADC_INTENCLR_END_Clear << SAADC_INTENCLR_END_Pos);               //Disable the SAADC interrupt
         NVIC_ClearPendingIRQ(SAADC_IRQn);                                                         //Clear the SAADC interrupt if set
-        
+
         //NRF_LOG_INFO("msmt ctr: %ld", m_electrode_measurement_counter);
-        if (m_electrode_measurement_counter == NUM_MEASUREMENTS-1)
+        if (m_electrode_measurement_counter == NUM_MEASUREMENTS)
         {
             // reset measurement count
             m_electrode_measurement_counter = 0;
@@ -91,7 +91,8 @@ static void saadc_electrode_callback(nrf_drv_saadc_evt_t const * p_event)
             
             // log event
             m_adc_evt_counter++;
-            NRF_LOG_INFO("ADC event number: %d, AIN0 = %d, AIN4 = %d, AIN6 = %d",(int)m_adc_evt_counter,m_electrode_saadc_vals_temp[0][0],m_electrode_saadc_vals_temp[1][0],m_electrode_saadc_vals_temp[2][0]);
+            NRF_LOG_INFO("ADC event number: %ld",m_adc_evt_counter);
+            //NRF_LOG_INFO("ADC event number: %d, AIN0 = %d, AIN4 = %d, AIN6 = %d",(int)m_adc_evt_counter,m_electrode_saadc_vals_temp[0][0],m_electrode_saadc_vals_temp[1][0],m_electrode_saadc_vals_temp[2][0]);
             
             // execute saadc_finished task set during init
             clear_FPU_interrupts();
@@ -137,10 +138,10 @@ static void vband_saadc_electrode_channels_init(void)
         NRF_SAADC->CH[2].CONFIG |= 0x01000000; 
     }
 
-    err_code = nrf_drv_saadc_buffer_convert(m_buffer_pool[0],SAADC_SAMPLES_IN_BUFFER);    //Set SAADC buffer 1. The SAADC will start to write to this buffer
+    err_code = nrf_drv_saadc_buffer_convert(m_buffer_pool[0], SAADC_SAMPLES_IN_BUFFER);
     APP_ERROR_CHECK(err_code);
 
-    err_code = nrf_drv_saadc_buffer_convert(m_buffer_pool[1],SAADC_SAMPLES_IN_BUFFER);    //Set SAADC buffer 1. The SAADC will start to write to this buffer
+    err_code = nrf_drv_saadc_buffer_convert(m_buffer_pool[1], SAADC_SAMPLES_IN_BUFFER);
     APP_ERROR_CHECK(err_code);
 
     m_saadc_initialized = true; 
@@ -157,8 +158,11 @@ static void rtc_handler(nrf_drv_rtc_int_type_t int_type)
         // stop after predefined number of measurements
         if (m_electrode_measurement_in_progress == true)
         {   
-            vband_saadc_electrode_channels_init();                     //Initialize the SAADC. In the case when SAADC_SAMPLES_IN_BUFFER > 1 then we only need to initialize the SAADC when the the buffer is empty.
-            nrf_drv_saadc_sample();                                        //Trigger the SAADC SAMPLE task
+            if (m_saadc_initialized == false)
+            {
+                vband_saadc_electrode_channels_init();                     //Initialize the SAADC. In the case when SAADC_SAMPLES_IN_BUFFER > 1 then we only need to initialize the SAADC when the the buffer is empty.
+            }
+            nrf_drv_saadc_sample();                                    //Trigger the SAADC SAMPLE task
         }
     }
 }

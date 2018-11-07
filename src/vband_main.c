@@ -126,8 +126,8 @@
 #define MAX_BATTERY_LEVEL                   100                                     /**< Maximum simulated battery level. */
 #define BATTERY_LEVEL_INCREMENT             1                                       /**< Increment between each simulated battery level measurement. */
 
-#define MIN_CONN_INTERVAL                   MSEC_TO_UNITS(200, UNIT_1_25_MS)        /**< Minimum acceptable connection interval (0.4 seconds). */
-#define MAX_CONN_INTERVAL                   MSEC_TO_UNITS(400, UNIT_1_25_MS)        /**< Maximum acceptable connection interval (0.65 second). */
+#define MIN_CONN_INTERVAL                   MSEC_TO_UNITS(100, UNIT_1_25_MS)        /**< Minimum acceptable connection interval (0.4 seconds). */
+#define MAX_CONN_INTERVAL                   MSEC_TO_UNITS(200, UNIT_1_25_MS)        /**< Maximum acceptable connection interval (0.65 second). */
 #define SLAVE_LATENCY                       0                                       /**< Slave latency. */
 #define CONN_SUP_TIMEOUT                    MSEC_TO_UNITS(4000, UNIT_10_MS)         /**< Connection supervisory time-out (4 seconds). */
 
@@ -1026,8 +1026,8 @@ static void external_sensor_init(void)
     BaseType_t xReturned;
 
     // initialize i2c + spi sensors
-    vband_sensor_init(BME280 | CCS811 | MAX30105 | ADXL362);
-    //vband_sensor_init(BME280 | CCS811 | MAX30105 | ADXL362 | SIMULATE);
+    //vband_sensor_init(BME280 | CCS811 | MAX30105 | ADXL362);
+    vband_sensor_init(BME280 | CCS811 | MAX30105 | ADXL362 | SIMULATE);
     //vband_sensor_init(MAX30105);
 
     // start tasks for each sensor
@@ -1082,7 +1082,27 @@ static void saadc_sample_task (void * pvParameter)
 static void saadc_run_voltage_alarm_algorithm(float * adc_ch1, float * adc_ch2, float * adc_ch3, uint16_t len)
 {
     static voltage_algorithm_results results;
-    check_for_voltage_detection(&results, adc_ch1, adc_ch2, adc_ch3, len);
+    static uint8_t p_data[sizeof(results)];
+    static uint16_t p_data_length = sizeof(results);
+    static bool current_alarm_status = false;
+
+    current_alarm_status = check_for_voltage_detection(&p_data[0], adc_ch1, adc_ch2, adc_ch3, len);
+
+    // control buzzer
+    if(current_alarm_status == true)
+    {
+        set_buzzer_status(BUZZER_ON_ALARM); // consecutive states return without re-initializing
+    }
+    else
+    {
+        set_buzzer_status(BUZZER_OFF);
+    }
+
+    // update ble
+    if (m_ble_connected_bool)
+    {
+        vband_characteristic_update(ble_vband_srv_alarm_update, &p_data[0], &p_data_length);
+    }
 }
 
 static void saadc_init(void)

@@ -15,13 +15,6 @@
 /*lint -restore */
 #include "voltage_alarm_algorithm.h"
 
-#define TOGGLE_PIN                  NRF_GPIO_PIN_MAP(0,30)      // Wakeup signal pin
-
-#define FFT_TEST_IN_SAMPLES_LEN     256
-#define FFT_TEST_OUT_SAMPLES_LEN    FFT_TEST_IN_SAMPLES_LEN/2
-#define SAMPLE_RATE                 1024.0f
-#define NUM_TEST_FREQS              2
-
 static float freqs_alert[NUM_TEST_FREQS]   = {50.0f, 60.0f};//, 50.0f};   // US and Europe Voltage Frequency
 static float mag_threshold[NUM_TEST_FREQS] = {30.0f, 30.0f};//, 30.0f}; // thresholds for the above freqs
 
@@ -69,7 +62,8 @@ static void fft_generate_samples(float32_t * p_input,
         return;
     }
 
-    for (i = 0; i < (size - 1UL); i += 2) {
+    for (i = 0; i < (size - 1UL); i += 2) 
+    {
         sample_idx = i / 2;
         // Real part.
         p_input[(uint16_t)i] = sin(sine_freq * (2.f * PI) * sample_idx / sampling_freq);
@@ -79,7 +73,7 @@ static void fft_generate_samples(float32_t * p_input,
 }
 
 /**
- * @brief Function for processing generated sine wave samples.
+ * @brief Function for centering FFT around midpoint of array
  * @param[in] p_input_output        Pointer to input data array with complex number samples in time domain.
  * @param[in] output_size           Processed data array size.
  */
@@ -116,7 +110,7 @@ static void fft_process(float32_t *                   p_input,
     // Calculate the magnitude at each bin using Complex Magnitude Module function.
     arm_cmplx_mag_f32(p_input, p_output, output_size);
     // FFT shift - put DC component at center of output array
-    fft_shift(p_output, output_size);
+    //fft_shift(p_output, output_size);
 }
 
 
@@ -132,7 +126,8 @@ static void add_imag_data(float * input, float * output, uint16_t len)
         return;
     }
 
-    for (i = 0; i < (len - 1UL); i += 2) {
+    for (i = 0; i < (len - 1UL); i += 2) 
+    {
         sample_idx = i / 2;
         // Real part.
         output[(uint16_t)i] = *(input + sample_idx);
@@ -147,7 +142,8 @@ static bool run_fft_single_channel(float * input, uint16_t len)
     uint16_t mid_i = len/2;
     float hz_per_index = SAMPLE_RATE/len;
 
-    NRF_LOG_INFO("FFT MAG VAL: " NRF_LOG_FLOAT_MARKER, NRF_LOG_FLOAT(*input));
+    //NRF_LOG_INFO("CH VAL 0: " NRF_LOG_FLOAT_MARKER, NRF_LOG_FLOAT(*input));
+    //NRF_LOG_INFO("CH VAL 0: " NRF_LOG_FLOAT_MARKER, NRF_LOG_FLOAT(*(input+len-1)));
     add_imag_data(input, &m_fft_temp_input_f32[0], 2*len); // 2*len to account for complex pairs
     fft_process(m_fft_temp_input_f32, &arm_cfft_sR_f32_len128, m_fft_temp_output_f32, FFT_TEST_OUT_SAMPLES_LEN);
 
@@ -155,7 +151,8 @@ static bool run_fft_single_channel(float * input, uint16_t len)
     //fft_process(input, &arm_cfft_sR_f32_len128, m_fft_temp_output_f32, FFT_TEST_OUT_SAMPLES_LEN);
 
     // copy postive side only
-    memcpy(&m_pos_freq_fft_mag[0], &m_fft_temp_output_f32[mid_i], sizeof(m_pos_freq_fft_mag)); 
+    memcpy(&m_pos_freq_fft_mag[0], &m_fft_temp_output_f32[0], sizeof(m_pos_freq_fft_mag)); 
+    //memcpy(&m_pos_freq_fft_mag[0], &m_fft_temp_output_f32[mid_i], sizeof(m_pos_freq_fft_mag)); 
 
     // check for threshold hit
     float mag_sq;
@@ -165,7 +162,7 @@ static bool run_fft_single_channel(float * input, uint16_t len)
         // compute the closest index
         nearest_ind = (uint8_t) round(freqs_alert[i] / hz_per_index) - 1;
         nearest_ind = (nearest_ind <= 0) ? 0: nearest_ind;
-        NRF_LOG_INFO("FFT MAG: " NRF_LOG_FLOAT_MARKER, NRF_LOG_FLOAT(m_pos_freq_fft_mag[nearest_ind]));
+        //NRF_LOG_INFO("FFT MAG: " NRF_LOG_FLOAT_MARKER, NRF_LOG_FLOAT(m_pos_freq_fft_mag[nearest_ind]));
         if (m_pos_freq_fft_mag[nearest_ind] >= mag_threshold[i])
         {
             return true;
@@ -176,13 +173,25 @@ static bool run_fft_single_channel(float * input, uint16_t len)
 
 static void fft_algorithm(struct voltage_algorithm_results *results, float * adc_ch1, float * adc_ch2, float * adc_ch3, uint16_t len)
 {
-    bool ret1 = false;
-    bool ret2 = false;
-    bool ret3 = false;
+    uint16_t i;
 
-    ret1 = run_fft_single_channel(adc_ch1, len);
-    ret2 = run_fft_single_channel(adc_ch2, len);
-    ret3 = run_fft_single_channel(adc_ch3, len);
+    results->ch1_alarm = run_fft_single_channel(adc_ch1, len);
+    for(i = 0; i < len/2; i++)
+    {
+        results->ch1_fft_results[i] = (uint8_t) m_pos_freq_fft_mag[i];
+    }
+
+    results->ch2_alarm = run_fft_single_channel(adc_ch2, len);
+    for(i = 0; i < len/2; i++)
+    {
+        results->ch2_fft_results[i] = (uint8_t) m_pos_freq_fft_mag[i];
+    }
+
+    results->ch3_alarm = run_fft_single_channel(adc_ch3, len);
+    for(i = 0; i < len/2; i++)
+    {
+        results->ch3_fft_results[i] = (uint8_t) m_pos_freq_fft_mag[i];
+    }
     
     clear_FPU_interrupts();
 }
@@ -203,7 +212,7 @@ static bool run_goertzel_single_channel(float * input, uint16_t len)
     uint16_t i, j;
     float Q0, Q1, Q2, mag, mag_sq, mag_sq_thresh;
 
-    NRF_LOG_INFO("GOERTZEL MAG VAL: " NRF_LOG_FLOAT_MARKER, NRF_LOG_FLOAT(*input));
+    //NRF_LOG_INFO("GOERTZEL MAG VAL: " NRF_LOG_FLOAT_MARKER, NRF_LOG_FLOAT(*input));
 
     // initialize constants
     if(!g_init)
@@ -232,7 +241,7 @@ static bool run_goertzel_single_channel(float * input, uint16_t len)
         }
         mag_sq = powf(Q1, 2) + powf(Q2, 2) - (Q1*Q2*coeff[i]);
         mag    = sqrtf(mag_sq);
-        NRF_LOG_INFO("GOERTZEL MAG: " NRF_LOG_FLOAT_MARKER, NRF_LOG_FLOAT(mag));
+        //NRF_LOG_INFO("GOERTZEL MAG: " NRF_LOG_FLOAT_MARKER, NRF_LOG_FLOAT(mag));
         if (mag >= mag_threshold[i])
         {
             return true;
@@ -243,20 +252,68 @@ static bool run_goertzel_single_channel(float * input, uint16_t len)
 
 static void goertzel_algorithm(struct voltage_algorithm_results *results, float * adc_ch1, float * adc_ch2, float * adc_ch3, uint16_t len)
 {
-    bool ret1 = false;
-    bool ret2 = false;
-    bool ret3 = false;
-
-    ret1 = run_goertzel_single_channel(adc_ch1, len);
-    ret2 = run_goertzel_single_channel(adc_ch2, len);
-    ret3 = run_goertzel_single_channel(adc_ch3, len);
+    results->ch1_alarm = run_goertzel_single_channel(adc_ch1, len);
+    results->ch2_alarm = run_goertzel_single_channel(adc_ch2, len);
+    results->ch3_alarm = run_goertzel_single_channel(adc_ch3, len);
 
     clear_FPU_interrupts();
 }
 
-
-void check_for_voltage_detection(struct voltage_algorithm_results *results, float * adc_ch1, float * adc_ch2, float * adc_ch3, uint16_t len)
+static bool check_for_alarm_state_change(bool ch1_alarm, bool ch2_alarm, bool ch3_alarm)
 {
+    static bool current_alarm_state = false;
+    static bool current_alarm_buf[NUM_CONSEC_TO_ALARM] = {false};
+    static bool current_unalarm_buf[NUM_CONSEC_TO_UNALARM] = {true};
+    static uint8_t idx1 = 0;
+    static uint8_t idx2 = 0;
+
+    if (ch1_alarm | ch2_alarm | ch3_alarm)
+    {
+        current_alarm_buf[idx1] = true;
+        current_unalarm_buf[idx2] = false;
+    }
+    else
+    {
+        current_alarm_buf[idx1] = false;
+        current_unalarm_buf[idx2] = true;
+    }
+
+    idx1 = (idx1 + 1) % NUM_CONSEC_TO_ALARM;
+    idx2 = (idx2 + 1) % NUM_CONSEC_TO_UNALARM;
+
+    uint8_t i;
+    if (current_alarm_state == false)
+    {
+        current_alarm_state = true;
+        for (i = 0; i < NUM_CONSEC_TO_ALARM; i++)
+        {
+            if (current_alarm_buf[i] == false)
+            {
+                current_alarm_state = false;
+                break;
+            }
+        }
+    }
+    else
+    {
+        current_alarm_state = false;
+        for (i = 0; i < NUM_CONSEC_TO_UNALARM; i++)
+        {
+            if (current_unalarm_buf[i] == false)
+            {
+                current_alarm_state = true;
+                break;
+            }
+        }
+    }
+    return current_alarm_state;
+}
+
+bool check_for_voltage_detection(uint8_t *results_buf, float * adc_ch1, float * adc_ch2, float * adc_ch3, uint16_t len)
+{
+    static voltage_algorithm_results results;
+
+    // configure toggle pin for latency testing
     static bool pin_cfg = false;
     if(!nrf_drv_gpiote_is_init())
     {
@@ -270,6 +327,7 @@ void check_for_voltage_detection(struct voltage_algorithm_results *results, floa
         pin_cfg = true;
     }
   
+    // for running example Sin wave
     if(0)
     {
         fft_generate_samples(&sine_wave[0], FFT_TEST_IN_SAMPLES_LEN, SAMPLE_RATE, 60.0, 0);
@@ -279,11 +337,14 @@ void check_for_voltage_detection(struct voltage_algorithm_results *results, floa
         }    
     }
 
+    results.num_fft_bins = FFT_TEST_OUT_SAMPLES_LEN/2;
+    results.fft_bin_size = SAMPLE_RATE/len;
+
     // FFT algorithm
     nrf_drv_gpiote_out_clear(TOGGLE_PIN);
     if(1)
     {
-        fft_algorithm(results, adc_ch1, adc_ch2, adc_ch3, len);
+        fft_algorithm(&results, adc_ch1, adc_ch2, adc_ch3, len);
     }
     nrf_drv_gpiote_out_set(TOGGLE_PIN);
 
@@ -291,7 +352,16 @@ void check_for_voltage_detection(struct voltage_algorithm_results *results, floa
     nrf_drv_gpiote_out_clear(TOGGLE_PIN);
     if(0)
     {
-        goertzel_algorithm(results, adc_ch1, adc_ch2, adc_ch3, len);
+        goertzel_algorithm(&results, adc_ch1, adc_ch2, adc_ch3, len);
     }
     nrf_drv_gpiote_out_set(TOGGLE_PIN);
+
+    // check for consecutive states to trigger alarm change
+    results.overall_alarm = check_for_alarm_state_change(results.ch1_alarm, results.ch2_alarm, results.ch3_alarm);
+
+    // copy to p_data, structure is memory aligned (pack(1))
+    memcpy(results_buf, (uint8_t *) &results.overall_alarm, sizeof(results));
+
+    // return alarm state
+    return results.overall_alarm;
 }                              

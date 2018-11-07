@@ -157,7 +157,10 @@ void set_buzzer_status(buzzer_status_t new_status)
 
     // new status = old, no change
     if (new_status == current_status)
-      return;
+        return;
+    
+    // propagate state change
+    current_status = new_status;
     
     // need to turn off before any state change
     if (m_used & USED_PWM(0))
@@ -167,7 +170,7 @@ void set_buzzer_status(buzzer_status_t new_status)
     }
 
     bool config_buzzer_flag = true;
-    switch (new_status)
+    switch (current_status)
     {
         case BUZZER_OFF:
             NRF_LOG_INFO("Turning buzzer off");
@@ -196,8 +199,8 @@ void set_buzzer_status(buzzer_status_t new_status)
     // configure PWM instance with new vals
     if (config_buzzer_flag)
     {
-      m_used |= USED_PWM(0);
-      (void)configure_pwm_instance(&m_pwm0, &new_pwm0_vals);
+        m_used |= USED_PWM(0);
+        (void)configure_pwm_instance(&m_pwm0, &new_pwm0_vals);
     }
 }
 
@@ -207,7 +210,10 @@ void set_led_status(led_status_t new_status)
 
     // new status = old, no change
     if (new_status == current_status)
-      return;
+        return;
+
+    // propagate state change
+    current_status = new_status;
     
     // need to turn off before any state change
     if (m_used & USED_PWM(1))
@@ -217,7 +223,7 @@ void set_led_status(led_status_t new_status)
     }
 
     bool config_buzzer_flag = true;
-    switch (new_status)
+    switch (current_status)
     {
         case LED_OFF:
             NRF_LOG_INFO("Turning LED off");

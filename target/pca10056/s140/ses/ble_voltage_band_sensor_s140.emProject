@@ -124,8 +124,8 @@
         <configuration Name="Release" build_exclude_from_build="No" />
       </file>
       <file file_name="$(GIT_DIR)/src/vband_ext_sensor_controller.c" />
-      <file file_name="../../../../src/max30105/heart_rate_detector.c" />
-      <file file_name="../../../../src/voltage_alarm_algorithm.c">
+      <file file_name="$(GIT_DIR)/src/max30105/heart_rate_detector.c" />
+      <file file_name="$(GIT_DIR)/src/voltage_alarm_algorithm.c">
         <configuration Name="Release" build_exclude_from_build="No" />
       </file>
     </folder>
@@ -163,7 +163,7 @@
       <file file_name="$(NRF_SDK_DIR)/components/ble/ble_services/ble_bas/ble_bas.c" />
       <file file_name="$(NRF_SDK_DIR)/components/ble/ble_services/ble_dis/ble_dis.c" />
       <file file_name="$(NRF_SDK_DIR)/components/ble/ble_services/ble_nus/ble_nus.c" />
-      <file file_name="../../../../src/ble_vband_srv.c" />
+      <file file_name="$(GIT_DIR)/src/ble_vband_srv.c" />
     </folder>
     <folder Name="nRF_SoftDevice">
       <file file_name="$(NRF_SDK_DIR)/components/softdevice/common/nrf_sdh.c" />
