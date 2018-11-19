@@ -51,17 +51,17 @@ extern "C" {
 #define LED_1             NRF_GPIO_PIN_MAP(0,17)
 #define LED_START         LED_1
 #define LED_STOP          LED_1
-#define LEDS_ACTIVE_STATE 0
+#define LEDS_ACTIVE_STATE 1
 #define LEDS_LIST         { LED_1 }
 #define LEDS_INV_MASK     LEDS_MASK
 #define BSP_LED_0         17
 
 // Buttons definitions; needed for boards.c
-#define BUTTONS_NUMBER    1
+#define BUTTONS_NUMBER       1
 #define BUTTONS_ACTIVE_STATE 0
-#define BUTTON_1          11
-#define BUTTON_PULL    NRF_GPIO_PIN_PULLUP
-#define BUTTONS_LIST { BUTTON_1 }
+#define BUTTON_1             11
+#define BUTTON_PULL          NRF_GPIO_PIN_PULLUP
+#define BUTTONS_LIST         { BUTTON_1 }
 
 // Buzzer
 #define BUZZER_GPIO           NRF_GPIO_PIN_MAP(0,23)

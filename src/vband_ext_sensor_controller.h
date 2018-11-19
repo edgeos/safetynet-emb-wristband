@@ -70,10 +70,17 @@ typedef enum
  */
 void vband_sensor_init(sensor_type_t use_sensors);
 
-/**@brief Initialize External Sensor Interfaces
+/**@brief Get External Sensor Data
  *
  */
 int8_t get_sensor_data(sensor_type_t get_sensor, uint8_t * p_data, uint16_t * p_data_length);
+
+
+uint32_t adxl362_configure_wakeup();
+
+void vband_sensor_shutdown(sensor_type_t use_sensors);
+
+void vband_sensor_wakeup(sensor_type_t use_sensors);
 
 #ifdef __cplusplus
 }

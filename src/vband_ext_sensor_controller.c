@@ -20,6 +20,7 @@
 #include "MAX30105.h"
 #include "vband_ext_sensor_controller.h"
 #include "heart_rate_detector.h"
+#include "nrf_drv_gpiote.h"
 
 #include "nrf_log.h"
 #include "nrf_log_ctrl.h"
@@ -165,7 +166,10 @@ static void print_sensor_data(struct bme280_data *comp_data)
         NRF_LOG_INFO("%0.2f, %0.2f, %0.2f\r\n",comp_data->temperature, comp_data->pressure, comp_data->humidity);
 #else
         //NRF_LOG_INFO("\n")
-        NRF_LOG_INFO("Temp:  %ld, Humid:  %ld, Pressure:  %ld  \r",comp_data->temperature, comp_data->humidity, comp_data->pressure);
+        //NRF_LOG_INFO("Temp:  %ld, Humid:  %ld, Pressure:  %ld  \r",comp_data->temperature, comp_data->humidity, comp_data->pressure);
+        NRF_LOG_INFO("Temperature (C): " NRF_LOG_FLOAT_MARKER, NRF_LOG_FLOAT(comp_data->temperature*0.01f));
+        NRF_LOG_INFO("Pressure (hPa): " NRF_LOG_FLOAT_MARKER, NRF_LOG_FLOAT(comp_data->pressure/256.0f));
+        NRF_LOG_INFO("Humidity (%%RH): " NRF_LOG_FLOAT_MARKER, NRF_LOG_FLOAT(comp_data->humidity/1024.0f));
 #endif
 }
 
@@ -366,8 +370,10 @@ static void sensor_ccs811_init(void)
         if(ccs811_init(&i2c_dev_ccs811) == true)
         {
             enabled_sensors |= CCS811;
+            //nrf_delay_ms(5);
+            //ccs811_reset(&i2c_dev_ccs811);
             nrf_delay_ms(5);
-            ccs811_start_mode(&i2c_dev_ccs811, 0x10);
+            ccs811_start_mode(&i2c_dev_ccs811, 0x01);
         }
     }
     else
@@ -387,6 +393,7 @@ static void get_ccs811_measurement(uint8_t * p_data, uint16_t * p_data_length)
     {
         ccs811_measure(&i2c_dev_ccs811, &eCO2, &TVOC);
     }
+    else
     {
         eCO2++;
         TVOC++;
@@ -405,12 +412,16 @@ static void get_ccs811_measurement(uint8_t * p_data, uint16_t * p_data_length)
 
 static void sensor_adxl362_init(void)
 {
-    if (ADXL362_Init() == 1) 
+    if (ADXL362_Init()) 
     {
         enabled_sensors |= ADXL362;
         ADXL362_SetPowerMode(1);
         ADXL362_SetRange(ADXL362_RANGE_2G);
         ADXL362_SetOutputRate(ADXL362_ODR_12_5_HZ);
+        ADXL362_SetupDetectionMode(ADXL362_MODE_LOOP);
+        ADXL362_SetupInactivityDetection(1, 100, 125);//7500); // referenced mode, 7500 = 10 minutes
+        ADXL362_SetupActivityDetection(1, 20, 13); // referenced mode, 13 = 1.04 sec
+        ADXL362_SetRegisterValue(ADXL362_INTMAP1_INT_LOW | ADXL362_INTMAP1_AWAKE, ADXL362_REG_INTMAP1, 1);
     }
     else
     {
@@ -422,28 +433,34 @@ static void get_adxl362_measurement(uint8_t * p_data, uint16_t * p_data_length)
 {
     static uint8_t data_buffer[20];
     static uint16_t data_buffer_length;
-
+    static uint8_t status_reg = 0;
     static int16_t xdata = 0;
     static int16_t ydata = 0;
     static int16_t zdata = 0;
+    static bool awake_status = false;
+
     if (!simulate_on)
     {
-        ADXL362_GetXyz(&xdata,&ydata,&zdata);
+        ADXL362_GetRegisterValue(&status_reg, ADXL362_REG_STATUS, 1);
+        awake_status = status_reg & ADXL362_STATUS_AWAKE;
+        ADXL362_GetXyz(&xdata, &ydata, &zdata);
     }
     else
     {
+        awake_status = true;
         xdata++;
         ydata++;
         zdata++;
     }
 
-    NRF_LOG_INFO("x:  %d  , y:  %d  , z:  %d\r", xdata, ydata, zdata);
+    //NRF_LOG_INFO("x:  %d  , y:  %d  , z:  %d\r", xdata, ydata, zdata);
 
     // package for BLE
     memcpy(&data_buffer[0], &xdata, sizeof(xdata));
     memcpy(&data_buffer[2], &ydata, sizeof(ydata));
     memcpy(&data_buffer[4], &zdata, sizeof(zdata));
-    data_buffer_length = 6;
+    memcpy(&data_buffer[6], &awake_status, sizeof(awake_status));
+    data_buffer_length = 8;
 
     // assign pointers
     memcpy(p_data, &data_buffer[0], data_buffer_length);
@@ -511,4 +528,71 @@ int8_t get_sensor_data(sensor_type_t get_sensor, uint8_t * p_data, uint16_t * p_
             break;
     }
     return ret_code;
+}
+
+uint32_t adxl362_configure_wakeup(void)
+{
+    ret_code_t err_code;
+
+    // check if sensor is enabled
+    if (simulate_on)
+    {
+        return NRF_SUCCESS;
+    }
+
+    if (!(enabled_sensors & ADXL362)) return NRF_SUCCESS;
+
+    if (!nrfx_gpiote_is_init())
+    {
+        err_code = nrfx_gpiote_init();
+        APP_ERROR_CHECK(err_code);		
+    }
+
+    nrf_gpio_cfg_sense_input(NRF_GPIO_PIN_MAP(1, 5), NRF_GPIO_PIN_PULLUP, NRF_GPIO_PIN_SENSE_LOW);
+    
+    return NRF_SUCCESS;
+
+}
+
+void vband_sensor_wakeup(sensor_type_t use_sensors)
+{
+    if (simulate_on)
+    {
+        return;
+    }
+    else
+    {
+        if((use_sensors & MAX30105) & (enabled_sensors & MAX30105))
+        {
+            MAX30105_wakeUp();
+        }
+        if((use_sensors & CCS811) & (enabled_sensors & CCS811))
+        {   
+//            ccs811_start_mode(&i2c_dev_ccs811, 0x03); // go to (1/10) Hz mode
+        }
+    }
+}
+
+void vband_sensor_shutdown(sensor_type_t use_sensors)
+{
+    if (simulate_on)
+    {
+        return;
+    }
+    else
+    {
+        if((use_sensors & MAX30105) & (enabled_sensors & MAX30105))
+        {
+            MAX30105_shutDown();
+        }
+        if((use_sensors & CCS811) & (enabled_sensors & CCS811))
+        {   
+            //ccs811_start_mode(&i2c_dev_ccs811, 0x00); // go to IDLE mode
+        }
+        if((use_sensors & BME280) & (enabled_sensors & BME280))
+        {  
+            // we should already be here but just in case
+            bme280_set_sensor_mode(BME280_SLEEP_MODE, &i2c_dev_bme280);
+        }
+    }
 }

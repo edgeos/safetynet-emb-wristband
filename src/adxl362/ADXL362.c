@@ -357,3 +357,26 @@ void ADXL362_SetupInactivityDetection(unsigned char  refOrAbs,
                      (refOrAbs * ADXL362_ACT_INACT_CTL_INACT_REF);
     ADXL362_SetRegisterValue(newActInactReg, ADXL362_REG_ACT_INACT_CTL, 1);
 }
+
+/***************************************************************************//**
+ * @brief Configures inactivity detection.
+ *
+ * @param mode - Referenced/Absolute Inactivity Select.
+ *                   Example: O - Default Mode
+ *                            1 - Linked mode.
+ *                            3 - Loop mode.
+ *
+ * @return None.
+*******************************************************************************/
+void ADXL362_SetupDetectionMode(unsigned char  mode)
+{
+    unsigned char oldActInactReg = 0;
+    unsigned char newActInactReg = 0;
+    
+    /* Enable inactivity interrupt and select a referenced or absolute
+       configuration. */
+    ADXL362_GetRegisterValue(&oldActInactReg, ADXL362_REG_ACT_INACT_CTL, 1);
+    newActInactReg = oldActInactReg & ~ADXL362_ACT_INACT_CTL_INACT_REF;
+    newActInactReg |= ADXL362_ACT_INACT_CTL_LINKLOOP(mode);
+    ADXL362_SetRegisterValue(newActInactReg, ADXL362_REG_ACT_INACT_CTL, 1);
+}

@@ -249,4 +249,7 @@ void ADXL362_SetupInactivityDetection(unsigned char  refOrAbs,
                                       unsigned short threshold,
                                       unsigned short time);
 
+/*! Configures detection mode. */
+void ADXL362_SetupDetectionMode(unsigned char  mode);
+
 #endif	/* __ADXL362_H__ */

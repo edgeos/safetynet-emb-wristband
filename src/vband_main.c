@@ -99,27 +99,29 @@
 #include "ADXL362.h"
 #include "MAX30105.h"
 
-#define SAADC_WAKEUP_SAMPLE_INTERVAL              500                                    /**< SAADC measurement interval (ms). */
+#define SAADC_WAKEUP_SAMPLE_INTERVAL_DISCONNECTED              1500                                    /**< SAADC measurement interval (ms). */
+#define SAADC_WAKEUP_SAMPLE_INTERVAL_CONNECTED                 500                                     /**< SAADC measurement interval (ms). */
 
 // defines for ext sensors, the first SAMPLE_INTERVAL defines how often we wake up, the
 // MEASURE_INTERVALs should be a multiple of the SAMPLE_INTERVAL
-#define EXT_SENSORS_WAKEUP_SAMPLE_INTERVAL        100                                      /**< Ext. Sensor measurement interval (ms). */
-#define EXT_SENSORS_WAKEUP_SAMPLE_INTERVAL_TICKS  APP_TIMER_TICKS(100)
-#define CCS811_MEASURE_INTERVAL                   1000                                    /**< CCS811 measurement interval (ms). */
-#define BME280_MEASURE_INTERVAL                   1000                                    /**< BME280 measurement interval (ms). */
-#define MAX30105_MEASURE_PROXIMITY_INTERVAL       250                                     /**< MAX30105 proximity measurement interval (ms). */
-#define MAX30105_MEASURE_HEART_RATE_INTERVAL      15                                      /**< MAX30105 proximity measurement interval (ms). */
-#define ADXL362_MEASURE_INTERVAL                  75                                      /**< MAX30105 measurement interval (ms). */
+#define EXT_SENSORS_WAKEUP_SAMPLE_INTERVAL          100                                      /**< Ext. Sensor measurement interval (ms). */
+#define EXT_SENSORS_WAKEUP_SAMPLE_INTERVAL_TICKS    APP_TIMER_TICKS(100)
+#define CCS811_MEASURE_INTERVAL                     1000                                    /**< CCS811 measurement interval (ms). */
+#define BME280_MEASURE_INTERVAL                     1000                                    /**< BME280 measurement interval (ms). */
+#define MAX30105_MEASURE_PROXIMITY_INTERVAL         250                                     /**< MAX30105 proximity measurement interval (ms). */
+#define MAX30105_MEASURE_HEART_RATE_INTERVAL        15                                      /**< MAX30105 proximity measurement interval (ms). */
+#define ADXL362_MEASURE_INTERVAL                    75                                      /**< ADXL362 measurement interval (ms). */
+#define ADXL362_INACTIVITY_WHILE_CONNECTED_TIMEOUT  600                                     /**< ADXL362 sleep interval while connected (seconds). */
 
-#define DEVICE_NAME                         "GE GRC Wristband"                      /**< Name of device. Will be included in the advertising data. */
+#define DEVICE_NAME                         "GE GRC Wrist 2"                        /**< Name of device. Will be included in the advertising data. */
 #define MANUFACTURER_NAME                   "GE"                                    /**< Manufacturer. Will be passed to Device Information Service. */
 #define VBAND_SERVICE_UUID_TYPE             BLE_UUID_TYPE_VENDOR_BEGIN              /**< UUID type for the Voltage Band Service (vendor specific). */
 
 #define APP_BLE_OBSERVER_PRIO               3                                       /**< Application's BLE observer priority. You shouldn't need to modify this value. */
 #define APP_BLE_CONN_CFG_TAG                1                                       /**< A tag identifying the SoftDevice BLE configuration. */
 
-#define APP_ADV_INTERVAL                    300                                     /**< The advertising interval (in units of 0.625 ms. This value corresponds to 187.5 ms). */
-#define APP_ADV_DURATION                    18000                                       /**< The advertising duration (180 seconds) in units of 10 milliseconds. */
+#define APP_ADV_INTERVAL                    160                                     /**< The advertising interval (in units of 0.625 ms. This value corresponds to 1000 ms). */
+#define APP_ADV_DURATION                    3000                                    /**< The advertising duration (60 seconds) in units of 10 milliseconds. */
 
 #define BATTERY_LEVEL_MEAS_INTERVAL         2000                                    /**< Battery level measurement interval (ms). */
 #define MIN_BATTERY_LEVEL                   81                                      /**< Minimum simulated battery level. */
@@ -285,26 +287,6 @@ static void battery_level_meas_timeout_handler(TimerHandle_t xTimer)
     battery_level_update();
 }
 
-
-/**@brief Function for handling the SAADC sample timer time-out.
- *
- * @details This function will be called each time the SAADC sample measurement timer expires.
- *
- * @param[in] xTimer Handler to the timer that called this function.
- *                   You may get identifier given to the function xTimerCreate using pvTimerGetTimerID.
- */
-static void saadc_sample_timeout_handler(TimerHandle_t xTimer)
-{
-    UNUSED_PARAMETER(xTimer);
-
-    // only sample the electrode adc if we're in a connected state
-    if (m_ble_connected_bool)
-    {
-        vband_saadc_sample_electrode_channels();
-    }
-}
-
-
 /**@brief Function for the Timer initialization.
  *
  * @details Initializes the timer module. This creates and starts application timers.
@@ -324,19 +306,6 @@ static void timers_init(void)
 
     /* Error checking */
     if ( (NULL == m_battery_timer) )
-    {
-        APP_ERROR_HANDLER(NRF_ERROR_NO_MEM);
-    }
-
-    // Create timers.
-    m_saadc_timer =  xTimerCreate("SAADC",
-                                   SAADC_WAKEUP_SAMPLE_INTERVAL,
-                                   pdTRUE,
-                                   NULL,
-                                   saadc_sample_timeout_handler);
-
-    /* Error checking */
-    if ( (NULL == m_saadc_timer) )
     {
         APP_ERROR_HANDLER(NRF_ERROR_NO_MEM);
     }
@@ -580,9 +549,18 @@ static void sleep_mode_enter(void)
     err_code = bsp_indication_set(BSP_INDICATE_IDLE);
     APP_ERROR_CHECK(err_code);
 
+#ifndef BOARD_VBAND_V1
     // Prepare wakeup buttons.
     err_code = bsp_btn_ble_sleep_mode_prepare();
     APP_ERROR_CHECK(err_code);
+
+    // Prepare activity interrupt
+    err_code = adxl362_configure_wakeup();
+    APP_ERROR_CHECK(err_code);
+#endif
+
+    // Put any connected sensors into sleep mode
+    vband_sensor_shutdown(BME280 | CCS811 | MAX30105 | ADXL362);
 
     // Go to system-off mode (this function will not return; wakeup will cause a reset).
     err_code = sd_power_system_off();
@@ -609,6 +587,7 @@ static void on_adv_evt(ble_adv_evt_t ble_adv_evt)
             break;
 
         case BLE_ADV_EVT_IDLE:
+            NRF_LOG_INFO("Advertising timeout.");
             sleep_mode_enter();
             break;
 
@@ -630,6 +609,9 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
     switch (p_ble_evt->header.evt_id)
     {
         case BLE_GAP_EVT_CONNECTED:
+            // Put any connected sensors into measurement mode while advertising
+            vband_sensor_wakeup(BME280 | CCS811 | MAX30105 | ADXL362);
+
             m_ble_connected_bool = true;
             NRF_LOG_INFO("Connected");
             err_code = bsp_indication_set(BSP_INDICATE_ADVERTISING_SLOW);
@@ -640,6 +622,9 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
             break;
 
         case BLE_GAP_EVT_DISCONNECTED:
+            // Put any connected sensors into sleep mode while advertising
+            vband_sensor_shutdown(BME280 | CCS811 | MAX30105 | ADXL362);
+
             m_ble_connected_bool = false;
             NRF_LOG_INFO("Disconnected");
             m_conn_handle = BLE_CONN_HANDLE_INVALID;
@@ -867,6 +852,9 @@ static void advertising_start(void * p_erase_bonds)
         ret_code_t err_code = ble_advertising_start(&m_advertising, BLE_ADV_MODE_FAST);
         APP_ERROR_CHECK(err_code);
     }
+
+    // Put any connected sensors into sleep mode while advertising
+    vband_sensor_shutdown(BME280 | CCS811 | MAX30105 | ADXL362);
 }
 
 
@@ -1005,15 +993,24 @@ static void adxl362_measure_task (void * pvParameter)
 {
     static uint8_t p_data[20];
     static uint16_t p_data_length;
+    static uint32_t consecutive_unawakes = 0;
+    static uint32_t timeout_ms = ADXL362_INACTIVITY_WHILE_CONNECTED_TIMEOUT*1000;
 
     UNUSED_PARAMETER(pvParameter);
     while(1)
     {
+        get_sensor_data(ADXL362, &p_data[0], &p_data_length);
         if(m_ble_connected_bool)
         {
-            get_sensor_data(ADXL362, &p_data[0], &p_data_length);
             vband_characteristic_update(ble_vband_srv_accelerometer_update, &p_data[0], &p_data_length);
+            consecutive_unawakes = (p_data[6] == 0) ? (consecutive_unawakes + 1) : 0;
+            if((consecutive_unawakes*ADXL362_MEASURE_INTERVAL) >= timeout_ms)
+            {
+                NRF_LOG_ERROR("Inactivity while connected timeout.");
+                sleep_mode_enter();
+            }
         }
+        else consecutive_unawakes = 0; // we only increment this while we're connected, the advertising timeout should go to sleep
         vTaskDelay(ADXL362_MEASURE_INTERVAL);
     }
 }
@@ -1026,9 +1023,9 @@ static void external_sensor_init(void)
     BaseType_t xReturned;
 
     // initialize i2c + spi sensors
-    //vband_sensor_init(BME280 | CCS811 | MAX30105 | ADXL362);
+    //vband_sensor_init(BME280 | MAX30105 | ADXL362);
     vband_sensor_init(BME280 | CCS811 | MAX30105 | ADXL362 | SIMULATE);
-    //vband_sensor_init(MAX30105);
+    //vband_sensor_init(ADXL362);
 
     // start tasks for each sensor
     xReturned = xTaskCreate(ccs811_measure_task, "CCS811", configMINIMAL_STACK_SIZE + 200, NULL, 1, &ccs811_measure_task_handle);
@@ -1062,20 +1059,28 @@ static void saadc_sample_task (void * pvParameter)
 {
     static uint8_t * p_data;
     static uint8_t * p_data_length;
+    static uint16_t  wakeup_interval = SAADC_WAKEUP_SAMPLE_INTERVAL_DISCONNECTED;
 
     UNUSED_PARAMETER(pvParameter);
     while(1)
     {
-        // only sample the electrode adc if we're in a connected state
-        if (1)//m_ble_connected_bool)
+        if(xSemaphoreTake(i2c_semaphore,wakeup_interval))
         {
-            if(xSemaphoreTake(i2c_semaphore,SAADC_WAKEUP_SAMPLE_INTERVAL))
-            {
-                vband_saadc_sample_electrode_channels();
-                xSemaphoreGive(i2c_semaphore);
-            }
+            vband_saadc_sample_electrode_channels();
+            xSemaphoreGive(i2c_semaphore);
         }
-        vTaskDelay(SAADC_WAKEUP_SAMPLE_INTERVAL);
+
+        // change sampling interval if we're connected
+        if (m_ble_connected_bool)
+        {
+            wakeup_interval = SAADC_WAKEUP_SAMPLE_INTERVAL_CONNECTED;
+        }
+        else
+        {
+            wakeup_interval = SAADC_WAKEUP_SAMPLE_INTERVAL_DISCONNECTED;
+        }
+
+        vTaskDelay(wakeup_interval);
     }
 }
 
@@ -1124,7 +1129,7 @@ static void saadc_init(void)
  */
 int main(void)
 {
-    bool erase_bonds = true;
+    bool erase_bonds = false;
 
     // Initialize semaphores
     i2c_semaphore = xSemaphoreCreateMutex();
@@ -1171,13 +1176,14 @@ int main(void)
     // added for VBAND functions
     external_sensor_init();
     saadc_init();
-    
-    //set_buzzer_status(BUZZER_ON_ALARM);
 
     // Create a FreeRTOS task for the BLE stack.
     // The task will run advertising_start() before entering its loop.
     //pm_peers_delete();
     nrf_sdh_freertos_init(advertising_start, &erase_bonds);
+
+    // go to low power mode
+    //sd_power_mode_set(NRF_POWER_MODE_LOWPWR);
 
     NRF_LOG_INFO("Voltage Band FreeRTOS Scheduler started.");
     // Start FreeRTOS scheduler.

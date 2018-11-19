@@ -101,15 +101,17 @@ bool ccs811_start_mode(struct ccs811_dev *dev, uint8_t mode)
 
     /* put device into APP_START, just write to the REG_APP_START register */
     dev->write(dev->dev_id, CCS811_REG_APP_START, NULL, 0);
-    nrf_delay_us(50);
+    nrf_delay_us(200);
 
     uint8_t reg_mode[2] = {mode, 0}; //0x30 = measure every 60 sec, 0x10 = every second
     dev->write(dev->dev_id, CCS811_REG_MEAS_MODE, reg_mode, 1);
-    nrf_delay_us(50);
+    nrf_delay_us(200);
 
     // verify status register
     uint8_t rx_buffer[4];
+    uint8_t rx_buffer2[4];
     dev->read(dev->dev_id, CCS811_REG_STATUS, rx_buffer, 1);
+    dev->read(dev->dev_id, CCS811_REG_MEAS_MODE, rx_buffer2, 1);
 
     // disable i2c comms
     ccs811_twi_disable();
@@ -157,6 +159,8 @@ bool ccs811_measure(struct ccs811_dev *dev, uint16_t *eCO2, uint16_t *TVOC)
     uint8_t rx_buffer[32];
     dev->read(dev->dev_id, CCS811_REG_STATUS, rx_buffer, 1);
     uint8_t status_rdy = rx_buffer[0] & 0x99; // bit 0 is active error
+    dev->read(dev->dev_id, CCS811_REG_MEAS_MODE, rx_buffer, 1);
+    uint8_t meas_mode = rx_buffer[0]; // bit 0 is active error
     if (status_rdy == 0x98)
     {
         dev->read(dev->dev_id, CCS811_REG_ALG_RESULTS_DATA, rx_buffer, 4);

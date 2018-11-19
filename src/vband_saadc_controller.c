@@ -76,13 +76,18 @@ static void saadc_electrode_callback(nrf_drv_saadc_evt_t const * p_event)
         m_electrode_measurement_counter++;
 
         // turn off SAADC
-        //nrf_drv_saadc_uninit();                                                                   //Unintialize SAADC to disable EasyDMA and save power
+        m_saadc_initialized = false;
+        nrf_drv_saadc_uninit();                                                                   //Unintialize SAADC to disable EasyDMA and save power
         NRF_SAADC->INTENCLR = (SAADC_INTENCLR_END_Clear << SAADC_INTENCLR_END_Pos);               //Disable the SAADC interrupt
         NVIC_ClearPendingIRQ(SAADC_IRQn);                                                         //Clear the SAADC interrupt if set
 
         //NRF_LOG_INFO("msmt ctr: %ld", m_electrode_measurement_counter);
         if (m_electrode_measurement_counter == NUM_MEASUREMENTS)
         {
+            //Power on RTC instance
+            nrf_drv_rtc_uninit(&rtc);                                         
+            m_rtc_initialized = false;
+
             // reset measurement count
             m_electrode_measurement_counter = 0;
 
