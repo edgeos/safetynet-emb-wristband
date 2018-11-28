@@ -48,13 +48,14 @@ extern "C" {
 #endif
 
 #define BLE_VBAND_NORMAL_DATA_LEN                    20
+#define BLE_VBAND_CONFIG_DATA_LEN                    30
 
 
 /**@brief Voltage Band event type. */
 typedef enum
 {
-    BLE_VBAND_SRV_MODE_NORMAL,
-    BLE_VBAND_SRV_MODE_ENGINEERING
+    BLE_VBAND_SRV_MODE_NORMAL = 1,
+    BLE_VBAND_SRV_MODE_ENGINEERING = 2
 } ble_vband_srv_config_mode_t;
 
 /**@brief Voltage Band event type. */
@@ -78,9 +79,10 @@ typedef enum
 /**@brief Voltage Band configuration data. */
 typedef struct
 {
-    ble_vband_srv_config_mode_t op_mode;           /**< Operating Mode for Device. */
-    uint16_t                    alarm_threshold;   /**< Alarm Threshold. */
-    ble_vband_stream_data_t     stream_data;       /**< What data to stream */
+    uint8_t config_data_buffer[BLE_VBAND_CONFIG_DATA_LEN];
+    //ble_vband_srv_config_mode_t op_mode;           /**< Operating Mode for Device. */
+    //uint16_t                    alarm_threshold;   /**< Alarm Threshold. */
+    //ble_vband_stream_data_t     stream_data;       /**< What data to stream */
 } ble_vband_srv_config_t;
 
 /**@brief Voltage Band Service client context structure.
@@ -135,6 +137,7 @@ struct ble_vband_srv_s
     ble_gatts_char_handles_t        streaming_data_handles;             /**< Handles related to the Voltage Band Streaming Data characteristic (as provided by the SoftDevice). */
     blcm_link_ctx_storage_t * const p_link_ctx_storage;                 /**< Pointer to link context storage with handles of all current connections and its context. */
     bool                            is_notification_supported_alarm;    /**< TRUE if notification of Alarm State is supported. */
+    bool                            is_notification_supported_config;   /**< TRUE if notification of Config State is supported. */
     bool                            is_notification_supported_accel_d;  /**< TRUE if notification of Accelerometer Data is supported. */
     bool                            is_notification_supported_thp_d;    /**< TRUE if notification of Temp/Humid/Pressure Data is supported. */
     bool                            is_notification_supported_gas_d;    /**< TRUE if notification of Gas Sensor Data is supported. */
@@ -186,6 +189,23 @@ uint32_t ble_vband_srv_alarm_update(ble_vband_srv_t * p_vband_srv,
                                     uint16_t        * p_length,
                                     uint16_t          conn_handle);
 
+
+/**@brief   Function for updating the alarm config characteristic.
+ *
+ * @details This function sends the alarm config as characteristic notification to the
+ *          peer.
+ *
+ * @param[in]     p_vband_srv       Pointer to the Voltage Band Service structure.
+ * @param[in]     p_data            Pointer to data to be sent.
+ * @param[in,out] p_length          Pointer Length of the string. Amount of sent bytes.
+ * @param[in]     conn_handle       Connection Handle of the destination client.
+ *
+ * @retval NRF_SUCCESS If the string was sent successfully. Otherwise, an error code is returned.
+ */
+uint32_t ble_vband_srv_config_update(ble_vband_srv_t * p_vband_srv,
+                                     uint8_t         * p_data,
+                                     uint16_t        * p_length,
+                                     uint16_t          conn_handle);
 
 /**@brief   Function for updating the accelerometer characteristic.
  *

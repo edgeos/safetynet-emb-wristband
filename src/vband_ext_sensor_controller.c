@@ -422,6 +422,7 @@ static void sensor_adxl362_init(void)
         ADXL362_SetupInactivityDetection(1, 100, 125);//7500); // referenced mode, 7500 = 10 minutes
         ADXL362_SetupActivityDetection(1, 20, 13); // referenced mode, 13 = 1.04 sec
         ADXL362_SetRegisterValue(ADXL362_INTMAP1_INT_LOW | ADXL362_INTMAP1_AWAKE, ADXL362_REG_INTMAP1, 1);
+        ADXL362_SetRegisterValue(ADXL362_INTMAP2_INT_LOW | ADXL362_INTMAP2_AWAKE, ADXL362_REG_INTMAP2, 1);
     }
     else
     {

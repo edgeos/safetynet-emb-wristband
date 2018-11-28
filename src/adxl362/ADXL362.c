@@ -222,6 +222,8 @@ void ADXL362_SetOutputRate(unsigned char outRate)
     newFilterCtl = oldFilterCtl & ~ADXL362_FILTER_CTL_ODR(0x7);
     newFilterCtl = newFilterCtl | ADXL362_FILTER_CTL_ODR(outRate);
     ADXL362_SetRegisterValue(newFilterCtl, ADXL362_REG_FILTER_CTL, 1);
+    ADXL362_GetRegisterValue(&oldFilterCtl, ADXL362_REG_FILTER_CTL, 1);
+    ADXL362_GetRegisterValue(&oldFilterCtl, ADXL362_REG_FILTER_CTL, 1);
 }
 
 /***************************************************************************//**

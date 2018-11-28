@@ -92,6 +92,7 @@
 #include "vband_saadc_controller.h"
 #include "vband_ext_sensor_controller.h"
 #include "voltage_alarm_algorithm.h"
+#include "vband_flash_controller.h"
 
 // external sensors
 #include "ccs811.h"
@@ -99,8 +100,8 @@
 #include "ADXL362.h"
 #include "MAX30105.h"
 
-#define SAADC_WAKEUP_SAMPLE_INTERVAL_DISCONNECTED              1500                                    /**< SAADC measurement interval (ms). */
-#define SAADC_WAKEUP_SAMPLE_INTERVAL_CONNECTED                 500                                     /**< SAADC measurement interval (ms). */
+#define SAADC_WAKEUP_SAMPLE_INTERVAL_DISCONNECTED              100                                    /**< SAADC measurement interval (ms). */
+#define SAADC_WAKEUP_SAMPLE_INTERVAL_CONNECTED                 100                                     /**< SAADC measurement interval (ms). */
 
 // defines for ext sensors, the first SAMPLE_INTERVAL defines how often we wake up, the
 // MEASURE_INTERVALs should be a multiple of the SAMPLE_INTERVAL
@@ -113,7 +114,7 @@
 #define ADXL362_MEASURE_INTERVAL                    75                                      /**< ADXL362 measurement interval (ms). */
 #define ADXL362_INACTIVITY_WHILE_CONNECTED_TIMEOUT  600                                     /**< ADXL362 sleep interval while connected (seconds). */
 
-#define DEVICE_NAME                         "GE GRC Wrist 2"                        /**< Name of device. Will be included in the advertising data. */
+#define DEVICE_NAME                         "GE GRC Wristband"                      /**< Name of device. Will be included in the advertising data. */
 #define MANUFACTURER_NAME                   "GE"                                    /**< Manufacturer. Will be passed to Device Information Service. */
 #define VBAND_SERVICE_UUID_TYPE             BLE_UUID_TYPE_VENDOR_BEGIN              /**< UUID type for the Voltage Band Service (vendor specific). */
 
@@ -164,6 +165,7 @@ static sensorsim_state_t m_battery_sim_state;                       /**< Battery
 
 static bool m_ble_connected_bool = false;
 
+static char m_ble_advertising_name[MAX_BLE_NAME_LENGTH] = {0};
 static ble_vband_srv_config_mode_t m_current_vband_mode = BLE_VBAND_SRV_MODE_NORMAL;
 
 
@@ -191,7 +193,11 @@ static TaskHandle_t m_logger_thread;                                /**< Definit
 #endif
 
 static void advertising_start(void * p_erase_bonds);
+static void update_advertising(void);
+static void update_vband_config_characteristic(void);
 
+//Adding new global variable that will be like pointer of ussed buffer
+uint8_t     P_buffer = 0;
 
 /**@brief Callback function for asserts in the SoftDevice.
  *
@@ -326,8 +332,8 @@ static void gap_params_init(void)
     BLE_GAP_CONN_SEC_MODE_SET_OPEN(&sec_mode);
 
     err_code = sd_ble_gap_device_name_set(&sec_mode,
-                                          (const uint8_t *)DEVICE_NAME,
-                                          strlen(DEVICE_NAME));
+                                          (const uint8_t *)&m_ble_advertising_name,
+                                          sizeof(m_ble_advertising_name));
     APP_ERROR_CHECK(err_code);
 
     memset(&gap_conn_params, 0, sizeof(gap_conn_params));
@@ -379,7 +385,6 @@ static void nrf_qwr_error_handler(uint32_t nrf_error)
     APP_ERROR_HANDLER(nrf_error);
 }
 
-
 /**@brief Function for handling the data from the Voltage Band Service.
  *
  * @details This function will process the data received from the Voltage Band BLE Service
@@ -389,20 +394,50 @@ static void nrf_qwr_error_handler(uint32_t nrf_error)
 /**@snippet [Handling the data received over BLE] */
 static void vband_data_handler(ble_vband_srv_evt_t * p_evt)
 {
-
+    ret_code_t err_code;
+    
+    uint8_t buf[BLE_VBAND_CONFIG_DATA_LEN];
     if (p_evt->type == BLE_VBAND_SRV_EVT_CONFIG_UPDATED)
     {
         uint32_t err_code;
 
         NRF_LOG_DEBUG("Received config update from BLE Voltage Band Service.");
-        //p_evt->params.config_data.op_mode
-        //p_evt->params.config_data.alarm_threshold
+        
+        // working buffer copy, parse
+        memcpy(&buf[0], p_evt->params.config_data.config_data_buffer, BLE_VBAND_CONFIG_DATA_LEN);
+        switch(buf[0])
+        {
+            case BLE_NAME:
+                // write to flash
+                memcpy(&m_ble_advertising_name[0], &buf[1], MAX_BLE_NAME_LENGTH);
+                write_flash_ble_advertisement_name(&m_ble_advertising_name[0], MAX_BLE_NAME_LENGTH);
+                
+                // update current advertising data
+                update_advertising();
+                break;
+            case ALARM_THRESHOLD:
+                // write to flash
+                write_flash_alarm_threshold((float*)&buf[1]);
+  
+                // update in algorithm
+                set_voltage_alarm_threshold(buf[1]);
+                break;
+            case DEFAULT_MODE:
+                // write to flash
+                write_flash_active_mode(&buf[1]);
+
+                // update in main app
+                m_current_vband_mode = buf[1];
+                break;
+            default:
+                NRF_LOG_DEBUG("Invalid Config command written, ignoring");
+                break;
+        }
+
+        // update characteristic back to show current config
+        update_vband_config_characteristic();
     }
-
 }
-/**@snippet [Handling the data received over BLE] */
-
-
 
 /**@brief Function for initializing services that will be used by the application.
  *
@@ -619,6 +654,9 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
             m_conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
             err_code = nrf_ble_qwr_conn_handle_assign(&m_qwr, m_conn_handle);
             APP_ERROR_CHECK(err_code);
+
+            // update config
+            update_vband_config_characteristic();
             break;
 
         case BLE_GAP_EVT_DISCONNECTED:
@@ -628,6 +666,7 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
             m_ble_connected_bool = false;
             NRF_LOG_INFO("Disconnected");
             m_conn_handle = BLE_CONN_HANDLE_INVALID;
+            APP_ERROR_CHECK(err_code);                                                   
             break;
 
         case BLE_GAP_EVT_PHY_UPDATE_REQUEST:
@@ -880,6 +919,46 @@ static void logger_thread(void * arg)
 }
 #endif //NRF_LOG_ENABLED
 
+static void update_advertising()
+{
+    ret_code_t err_code;
+    ble_gap_conn_sec_mode_t sec_mode;
+    static bool buffer_index; 
+    static ble_gap_adv_data_t new_data;
+
+    BLE_GAP_CONN_SEC_MODE_SET_OPEN(&sec_mode);
+
+    err_code = sd_ble_gap_device_name_set(&sec_mode,
+                                          (const uint8_t *)&m_ble_advertising_name,
+                                          sizeof(m_ble_advertising_name));
+    APP_ERROR_CHECK(err_code);   
+    
+    // We alternate between two data buffer in order to hot-swap
+    ble_gap_adv_data_t *old_data  = &m_advertising.adv_data;
+
+    // Copy advertising data
+    static uint8_t data[2][BLE_GAP_ADV_SET_DATA_SIZE_MAX];
+    new_data.adv_data.p_data      = data[buffer_index];
+    new_data.adv_data.len         = old_data->adv_data.len;
+    memcpy(new_data.adv_data.p_data, old_data->adv_data.p_data, old_data->adv_data.len);
+
+    // Copy scan response data
+    static uint8_t scan_data[2][BLE_GAP_ADV_SET_DATA_SIZE_MAX];
+    new_data.scan_rsp_data.p_data = scan_data[buffer_index];
+    new_data.scan_rsp_data.len    = old_data->scan_rsp_data.len;
+    memcpy(new_data.scan_rsp_data.p_data,
+           old_data->scan_rsp_data.p_data,
+           old_data->scan_rsp_data.len);
+
+    err_code = ble_advertising_advdata_update(&m_advertising, &new_data, true);
+    APP_ERROR_CHECK(err_code);
+
+    buffer_index = !buffer_index;
+}
+
+/**@snippet [Handling the data received over BLE] */
+
+
 /**@brief A function which is hooked to idle task.
  * @note Idle hook must be enabled in FreeRTOS configuration (configUSE_IDLE_HOOK).
  */
@@ -899,12 +978,25 @@ static void clock_init(void)
     nrf_drv_clock_lfclk_request(NULL);
 }
 
+static void update_vband_config_characteristic(void)
+{
+    //ble_vband_srv_config_mode_t op_mode;           /**< Operating Mode for Device. */
+    //uint16_t                    alarm_threshold;   /**< Alarm Threshold. */
+    static uint8_t p_data[BLE_VBAND_CONFIG_DATA_LEN];
+    static uint16_t p_data_length;
+    
+    memset(&p_data[0],0,BLE_VBAND_CONFIG_DATA_LEN);
+    p_data[0] = m_current_vband_mode;
+
+    read_flash_alarm_threshold((float *)&p_data[1]);
+    vband_characteristic_update(ble_vband_srv_config_update, &p_data[0], &p_data_length);
+}
 
 /**@brief Function for pinging the CCS811 for a measurement.
  */
 static void ccs811_measure_task (void * pvParameter)
 {
-    static uint8_t p_data[20];
+    static uint8_t p_data[BLE_VBAND_NORMAL_DATA_LEN];
     static uint16_t p_data_length;
 
     UNUSED_PARAMETER(pvParameter);
@@ -928,7 +1020,7 @@ static void ccs811_measure_task (void * pvParameter)
  */
 static void bme280_measure_task (void * pvParameter)
 {
-    static uint8_t p_data[20];
+    static uint8_t p_data[BLE_VBAND_NORMAL_DATA_LEN];
     static uint16_t p_data_length;
 
     UNUSED_PARAMETER(pvParameter);
@@ -952,7 +1044,7 @@ static void bme280_measure_task (void * pvParameter)
  */
 static void max30105_measure_task (void * pvParameter)
 {
-    static uint8_t p_data[20];
+    static uint8_t p_data[BLE_VBAND_NORMAL_DATA_LEN];
     static uint16_t p_data_length;
     static max30105_state_t current_state = PRESENCE_NOT_DETECTED;
     static uint16_t thread_interval = MAX30105_MEASURE_PROXIMITY_INTERVAL;
@@ -991,7 +1083,7 @@ static void max30105_measure_task (void * pvParameter)
  */
 static void adxl362_measure_task (void * pvParameter)
 {
-    static uint8_t p_data[20];
+    static uint8_t p_data[BLE_VBAND_NORMAL_DATA_LEN];
     static uint16_t p_data_length;
     static uint32_t consecutive_unawakes = 0;
     static uint32_t timeout_ms = ADXL362_INACTIVITY_WHILE_CONNECTED_TIMEOUT*1000;
@@ -1024,7 +1116,7 @@ static void external_sensor_init(void)
 
     // initialize i2c + spi sensors
     //vband_sensor_init(BME280 | MAX30105 | ADXL362);
-    vband_sensor_init(BME280 | CCS811 | MAX30105 | ADXL362 | SIMULATE);
+    vband_sensor_init(BME280 | CCS811 | MAX30105 | SIMULATE);
     //vband_sensor_init(ADXL362);
 
     // start tasks for each sensor
@@ -1158,10 +1250,25 @@ int main(void)
 
     NRF_LOG_INFO("Reboot.");
 
+    // Initialize modules.
+    initialize_flash();
+
+    // Set advertising name from flash
+    if (!read_flash_ble_advertisement_name(&m_ble_advertising_name[0]))
+    {
+        memcpy(&m_ble_advertising_name[0], (const uint8_t *)DEVICE_NAME, strlen(DEVICE_NAME));
+    }
+
+    // Set alarm threshold from flash
+    float flash_alarm_threshold = 0.0f;
+    if (read_flash_alarm_threshold(&flash_alarm_threshold))
+    {
+        set_voltage_alarm_threshold(flash_alarm_threshold);
+    }
+
     // Configure and initialize the BLE stack.
     ble_stack_init();
 
-    // Initialize modules.
     timers_init();
     buttons_leds_init(&erase_bonds);
     gap_params_init();

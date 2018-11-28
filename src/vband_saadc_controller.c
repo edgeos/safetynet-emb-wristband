@@ -28,8 +28,7 @@
 #define SAADC_BURST_MODE           0    //Set to 1 to enable BURST mode, otherwise set to 0.
 
 #define RTC_FREQUENCY              1024 // must be a factor of 32768
-#define RTC_CC_VALUE               1    //Determines the RTC interrupt frequency and thereby the SAADC sampling frequency
-#define NUM_MEASUREMENTS           128
+#define NUM_MEASUREMENTS           512
 
 const  nrf_drv_rtc_t           rtc = NRF_DRV_RTC_INSTANCE(2); // Declaring an instance of nrf_drv_rtc for RTC2. */
 
@@ -37,8 +36,7 @@ static nrf_saadc_value_t       m_buffer_pool[2][SAADC_SAMPLES_IN_BUFFER];
 static uint32_t                m_adc_evt_counter = 0;
 static bool                    m_saadc_initialized = false;
 static bool                    m_rtc_initialized = false;
-static float                   m_electrode_saadc_vals_temp[3][NUM_MEASUREMENTS];
-static nrf_saadc_value_t       m_electrode_saadc_vals_worker[3][NUM_MEASUREMENTS];
+static float                   m_electrode_saadc_vals[3][NUM_MEASUREMENTS];
 static uint16_t                m_electrode_measurement_counter = 0;
 static bool                    m_electrode_measurement_in_progress = false;
 static float                   vRef = 3.6;
@@ -57,6 +55,7 @@ static void clear_FPU_interrupts(void)
  */
 static void saadc_electrode_callback(nrf_drv_saadc_evt_t const * p_event)
 {
+    static uint16_t fill_index = 0;
     if (p_event->type == NRF_DRV_SAADC_EVT_DONE)                                                        //Capture offset calibration complete event
     {
         ret_code_t err_code;
@@ -68,41 +67,25 @@ static void saadc_electrode_callback(nrf_drv_saadc_evt_t const * p_event)
         for (int i = 0; i < SAADC_SAMPLES_IN_BUFFER; i++)
         {
             // convert to float and stuff in array
-            m_electrode_saadc_vals_temp[i][m_electrode_measurement_counter] = (vRef*p_event->data.done.p_buffer[i])/resCts;         
+            m_electrode_saadc_vals[i][fill_index] = (vRef*p_event->data.done.p_buffer[i])/resCts;         
             clear_FPU_interrupts();
         }
 
-        // increment sample
-        m_electrode_measurement_counter++;
+        // increment sample num and index
+        fill_index = (fill_index == (NUM_MEASUREMENTS-1)) ? 0 : (fill_index + 1);
+        m_electrode_measurement_counter = (m_electrode_measurement_counter ==  NUM_MEASUREMENTS) 
+                                          ? NUM_MEASUREMENTS : (m_electrode_measurement_counter + 1);
 
         // turn off SAADC
         m_saadc_initialized = false;
         nrf_drv_saadc_uninit();                                                                   //Unintialize SAADC to disable EasyDMA and save power
         NRF_SAADC->INTENCLR = (SAADC_INTENCLR_END_Clear << SAADC_INTENCLR_END_Pos);               //Disable the SAADC interrupt
         NVIC_ClearPendingIRQ(SAADC_IRQn);                                                         //Clear the SAADC interrupt if set
-
-        //NRF_LOG_INFO("msmt ctr: %ld", m_electrode_measurement_counter);
-        if (m_electrode_measurement_counter == NUM_MEASUREMENTS)
-        {
-            //Power on RTC instance
-            nrf_drv_rtc_uninit(&rtc);                                         
-            m_rtc_initialized = false;
-
-            // reset measurement count
-            m_electrode_measurement_counter = 0;
-
-            // set flag to false, done for now
-            m_electrode_measurement_in_progress = false;
             
-            // log event
-            m_adc_evt_counter++;
-            NRF_LOG_INFO("ADC event number: %ld",m_adc_evt_counter);
-            //NRF_LOG_INFO("ADC event number: %d, AIN0 = %d, AIN4 = %d, AIN6 = %d",(int)m_adc_evt_counter,m_electrode_saadc_vals_temp[0][0],m_electrode_saadc_vals_temp[1][0],m_electrode_saadc_vals_temp[2][0]);
-            
-            // execute saadc_finished task set during init
-            clear_FPU_interrupts();
-            saadc_task_finished_fn(&m_electrode_saadc_vals_temp[0][0], &m_electrode_saadc_vals_temp[1][0], &m_electrode_saadc_vals_temp[2][0], NUM_MEASUREMENTS);
-        }  
+        // log event
+        m_adc_evt_counter++;
+        NRF_LOG_INFO("ADC event number: %ld",m_adc_evt_counter);
+        //saadc_task_finished_fn(&m_electrode_saadc_vals[0][0], &m_electrode_saadc_vals[1][0], &m_electrode_saadc_vals[2][0], NUM_MEASUREMENTS);  
     }
 }
 
@@ -160,15 +143,11 @@ static void rtc_handler(nrf_drv_rtc_int_type_t int_type)
 	
     if (int_type == NRF_DRV_RTC_INT_TICK) // sample SAADC event
     {
-        // stop after predefined number of measurements
-        if (m_electrode_measurement_in_progress == true)
-        {   
-            if (m_saadc_initialized == false)
-            {
-                vband_saadc_electrode_channels_init();                     //Initialize the SAADC. In the case when SAADC_SAMPLES_IN_BUFFER > 1 then we only need to initialize the SAADC when the the buffer is empty.
-            }
-            nrf_drv_saadc_sample();                                    //Trigger the SAADC SAMPLE task
+        if (m_saadc_initialized == false)
+        {
+            vband_saadc_electrode_channels_init();                     //Initialize the SAADC. In the case when SAADC_SAMPLES_IN_BUFFER > 1 then we only need to initialize the SAADC when the the buffer is empty.
         }
+        nrf_drv_saadc_sample();                                    //Trigger the SAADC SAMPLE task
     }
 }
 
@@ -206,17 +185,16 @@ void saadc_assign_callback_fn(saadc_finished_fnptr_t fn)
  */
 void vband_saadc_sample_electrode_channels(void)
 {   
-    // defer if measurement still in progress for any reason
-    if(!m_electrode_measurement_in_progress)
+    // start the RTC that controls the sampling intervals for the electrode channels
+    if (!m_rtc_initialized)
     {
-        // protect the data array until it's ready
-        m_electrode_measurement_in_progress = true;
-
-        // start the RTC that controls the sampling intervals for the electrode channels
-        if (!m_rtc_initialized)
-        {
-            vband_electrode_sample_rtc_config();
-        }
+        vband_electrode_sample_rtc_config();
+    }
+    
+    // SAADC always runs and continuously fills the buffer, just run the algorithm
+    if (m_electrode_measurement_counter >= NUM_MEASUREMENTS)
+    {
+        saadc_task_finished_fn(&m_electrode_saadc_vals[0][0], &m_electrode_saadc_vals[1][0], &m_electrode_saadc_vals[2][0], NUM_MEASUREMENTS);
     }
 }
 /** @} */

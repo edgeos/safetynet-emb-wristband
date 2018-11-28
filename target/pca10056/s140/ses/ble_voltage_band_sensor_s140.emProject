@@ -119,6 +119,7 @@
     <folder Name="Application">
       <file file_name="$(GIT_DIR)/src/vband_main.c" />
       <file file_name="../config/sdk_config.h" />
+      <file file_name="$(GIT_DIR)/src/vband_flash_controller.c" />
       <file file_name="$(GIT_DIR)/src/vband_pwm_controller.c" />
       <file file_name="$(GIT_DIR)/src/vband_saadc_controller.c">
         <configuration Name="Release" build_exclude_from_build="No" />

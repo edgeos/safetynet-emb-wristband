@@ -112,9 +112,17 @@ static void on_write(ble_vband_srv_t * p_vband_srv, ble_evt_t const * p_ble_evt)
     else if ((p_evt_write->handle == p_vband_srv->config_handles.value_handle) &&
              (p_vband_srv->evt_handler != NULL))
     {
-        evt.type                               = BLE_VBAND_SRV_EVT_CONFIG_UPDATED;
-        evt.params.config_data.op_mode         = *(p_evt_write->data);
-        evt.params.config_data.alarm_threshold = uint16_decode(p_evt_write->data+1);
+        if (ble_srv_is_notification_enabled(p_evt_write->data))
+        {
+            p_vband_srv->is_notification_supported_config = true;
+        }
+        else
+        {
+            p_vband_srv->is_notification_supported_config = false;
+        }
+
+        evt.type = BLE_VBAND_SRV_EVT_CONFIG_UPDATED;
+        memcpy(&evt.params.config_data.config_data_buffer[0], p_evt_write->data, BLE_VBAND_CONFIG_DATA_LEN);
         p_vband_srv->evt_handler(&evt);
     }
     else
@@ -220,7 +228,7 @@ uint32_t ble_vband_srv_init(ble_vband_srv_t * p_vband_srv, ble_vband_srv_init_t 
     memset(&add_char_params, 0, sizeof(add_char_params));
     add_char_params.uuid                     = VOLTAGE_ALARM_CONFIG_CHAR_UUID;
     add_char_params.uuid_type                = p_vband_srv->uuid_type;
-    add_char_params.max_len                  = BLE_VBAND_NORMAL_DATA_LEN;
+    add_char_params.max_len                  = BLE_VBAND_CONFIG_DATA_LEN;
     add_char_params.init_len                 = sizeof(uint8_t);
     add_char_params.is_var_len               = true;
     add_char_params.char_props.read          = 1;
@@ -398,7 +406,7 @@ uint32_t ble_vband_srv_config_update(ble_vband_srv_t * p_vband_srv,
     }
 
     // generic characteristic update call
-    return update_characteristic(p_vband_srv, p_data, p_length, conn_handle, p_vband_srv->config_handles.value_handle, false);
+    return update_characteristic(p_vband_srv, p_data, p_length, conn_handle, p_vband_srv->config_handles.value_handle, true);
 }
 
 

@@ -16,7 +16,7 @@
 #include "voltage_alarm_algorithm.h"
 
 static float freqs_alert[NUM_TEST_FREQS]   = {50.0f, 60.0f};//, 50.0f};   // US and Europe Voltage Frequency
-static float mag_threshold[NUM_TEST_FREQS] = {200.0f, 2000.0f};//, 30.0f}; // thresholds for the above freqs
+static float mag_threshold[NUM_TEST_FREQS] = {100.0f, 100.0f};//, 30.0f};   // thresholds for the above freqs
 
 // for FFT-based algorithm
 static float m_fft_temp_input_f32[FFT_TEST_IN_SAMPLES_LEN];
@@ -113,7 +113,6 @@ static void fft_process(float32_t *                   p_input,
     //fft_shift(p_output, output_size);
 }
 
-
 static void add_imag_data(float * input, float * output, uint16_t len)
 {
     uint32_t i;
@@ -143,16 +142,18 @@ static bool run_fft_single_channel(float * input, uint16_t len)
     float hz_per_index = SAMPLE_RATE/len;
 
     //NRF_LOG_INFO("CH VAL 0: " NRF_LOG_FLOAT_MARKER, NRF_LOG_FLOAT(*input));
-    //NRF_LOG_INFO("CH VAL 0: " NRF_LOG_FLOAT_MARKER, NRF_LOG_FLOAT(*(input+len-1)));
     add_imag_data(input, &m_fft_temp_input_f32[0], 2*len); // 2*len to account for complex pairs
-    fft_process(m_fft_temp_input_f32, &arm_cfft_sR_f32_len128, m_fft_temp_output_f32, FFT_TEST_OUT_SAMPLES_LEN);
-
-    // if using Sin wave
-    //fft_process(input, &arm_cfft_sR_f32_len128, m_fft_temp_output_f32, FFT_TEST_OUT_SAMPLES_LEN);
+    if (len == 128)
+    {
+        fft_process(m_fft_temp_input_f32, &arm_cfft_sR_f32_len128, m_fft_temp_output_f32, FFT_TEST_OUT_SAMPLES_LEN);
+    }
+    else if (len == 512)
+    {
+        fft_process(m_fft_temp_input_f32, &arm_cfft_sR_f32_len512, m_fft_temp_output_f32, FFT_TEST_OUT_SAMPLES_LEN);
+    }
 
     // copy postive side only
     memcpy(&m_pos_freq_fft_mag[0], &m_fft_temp_output_f32[0], sizeof(m_pos_freq_fft_mag)); 
-    //memcpy(&m_pos_freq_fft_mag[0], &m_fft_temp_output_f32[mid_i], sizeof(m_pos_freq_fft_mag)); 
 
     // check for threshold hit
     float mag_sq;
@@ -160,7 +161,7 @@ static bool run_fft_single_channel(float * input, uint16_t len)
     for (uint8_t i = 0; i < num__freqs; i++)
     {
         // compute the closest index
-        nearest_ind = (uint8_t) round(freqs_alert[i] / hz_per_index) - 1;
+        nearest_ind = (uint8_t) round(freqs_alert[i] / hz_per_index) + 1;
         nearest_ind = (nearest_ind <= 0) ? 0: nearest_ind;
         //NRF_LOG_INFO("FFT MAG: " NRF_LOG_FLOAT_MARKER, NRF_LOG_FLOAT(m_pos_freq_fft_mag[nearest_ind]));
         if (m_pos_freq_fft_mag[nearest_ind] >= mag_threshold[i])
@@ -176,19 +177,19 @@ static void fft_algorithm(struct voltage_algorithm_results *results, float * adc
     uint16_t i;
 
     results->ch1_alarm = run_fft_single_channel(adc_ch1, len);
-    for(i = 0; i < len/2; i++)
+    for(i = 0; i < FFT_BLE_SAMPLES_LEN; i++)
     {
         results->ch1_fft_results[i] = (uint8_t) m_pos_freq_fft_mag[i];
     }
 
     results->ch2_alarm = run_fft_single_channel(adc_ch2, len);
-    for(i = 0; i < len/2; i++)
+    for(i = 0; i < FFT_BLE_SAMPLES_LEN; i++)
     {
         results->ch2_fft_results[i] = (uint8_t) m_pos_freq_fft_mag[i];
     }
 
     results->ch3_alarm = run_fft_single_channel(adc_ch3, len);
-    for(i = 0; i < len/2; i++)
+    for(i = 0; i < FFT_BLE_SAMPLES_LEN; i++)
     {
         results->ch3_fft_results[i] = (uint8_t) m_pos_freq_fft_mag[i];
     }
@@ -337,7 +338,7 @@ bool check_for_voltage_detection(uint8_t *results_buf, float * adc_ch1, float * 
         }    
     }
 
-    results.num_fft_bins = FFT_TEST_OUT_SAMPLES_LEN/2;
+    results.num_fft_bins = FFT_BLE_SAMPLES_LEN;
     results.fft_bin_size = SAMPLE_RATE/len;
 
     // FFT algorithm
@@ -364,4 +365,12 @@ bool check_for_voltage_detection(uint8_t *results_buf, float * adc_ch1, float * 
 
     // return alarm state
     return results.overall_alarm;
-}                              
+}         
+
+void set_voltage_alarm_threshold(float threshold)
+{
+    for(uint8_t i = 0; i < NUM_TEST_FREQS; i++)
+    {
+        mag_threshold[i] = threshold;
+    }
+}                     
