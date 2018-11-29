@@ -26,8 +26,8 @@ NRF_FSTORAGE_DEF(nrf_fstorage_t fstorage) =
      * You must set these manually, even at runtime, before nrf_fstorage_init() is called.
      * The function nrf5_flash_end_addr_get() can be used to retrieve the last address on the
      * last page of flash available to write data. */
-    .start_addr = 0x3e000,
-    .end_addr   = 0x3ffff,
+    .start_addr = 0xfe000,
+    .end_addr   = 0xfffff,
 };
 nrf_fstorage_api_t * p_fs_api;
 
@@ -153,7 +153,10 @@ void write_flash_ble_advertisement_name(uint8_t * buf, uint8_t len)
     m_ble_name.magic_number = FLASHWRITE_BLOCK_VALID;
     m_ble_name.config = BLE_NAME;
 
-    // write to flash
+    // write to flash, need to erase first
+    /*rc = nrf_fstorage_erase(&fstorage, BLE_NAME_ADDRESS, sizeof(m_ble_name), NULL);
+    APP_ERROR_CHECK(rc);
+    nrf_delay_ms(1);*/
     rc = nrf_fstorage_write(&fstorage, BLE_NAME_ADDRESS, &m_ble_name, sizeof(m_ble_name), NULL);
     APP_ERROR_CHECK(rc);
     //wait_for_flash_ready(&fstorage);
@@ -167,7 +170,10 @@ void write_flash_alarm_threshold(float * buf)
     m_alarm_threshold.magic_number = FLASHWRITE_BLOCK_VALID;
     m_alarm_threshold.config = ALARM_THRESHOLD;
 
-    // write to flash
+    // write to flash, need to erase first
+    /*rc = nrf_fstorage_erase(&fstorage, ALARM_THRESHOLD_ADDRESS, sizeof(m_alarm_threshold), NULL);
+    APP_ERROR_CHECK(rc);
+    nrf_delay_ms(1);*/
     rc = nrf_fstorage_write(&fstorage, ALARM_THRESHOLD_ADDRESS, &m_alarm_threshold, sizeof(m_alarm_threshold), NULL);
     APP_ERROR_CHECK(rc);
     //wait_for_flash_ready(&fstorage);
@@ -181,7 +187,10 @@ void write_flash_active_mode(uint8_t * buf)
     m_active_mode.magic_number = FLASHWRITE_BLOCK_VALID;
     m_active_mode.config = DEFAULT_MODE;
 
-    // write to flash
+    // write to flash, need to erase first
+    /*rc = nrf_fstorage_erase(&fstorage, ACTIVE_MODE_ADDRESS, sizeof(m_active_mode), NULL);
+    APP_ERROR_CHECK(rc);
+    nrf_delay_ms(1);*/
     rc = nrf_fstorage_write(&fstorage, ACTIVE_MODE_ADDRESS, &m_active_mode, sizeof(m_active_mode), NULL);
     APP_ERROR_CHECK(rc);
     //wait_for_flash_ready(&fstorage);

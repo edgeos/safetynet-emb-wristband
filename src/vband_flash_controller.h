@@ -8,9 +8,9 @@
 extern "C" {
 #endif
 
-#define BLE_NAME_ADDRESS                (0x3e000)
-#define ALARM_THRESHOLD_ADDRESS         (0x3e100)
-#define ACTIVE_MODE_ADDRESS             (0x3e200)
+#define BLE_NAME_ADDRESS                (0xfe000)
+#define ALARM_THRESHOLD_ADDRESS         (0xfe100)
+#define ACTIVE_MODE_ADDRESS             (0xfe200)
 
 #define FLASHWRITE_BLOCK_VALID          (0xA55A5AA5)
 #define FLASHWRITE_BLOCK_INVALID        (0xA55A0000)
