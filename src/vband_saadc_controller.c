@@ -36,9 +36,11 @@ static nrf_saadc_value_t       m_buffer_pool[2][SAADC_SAMPLES_IN_BUFFER];
 static uint32_t                m_adc_evt_counter = 0;
 static bool                    m_saadc_initialized = false;
 static bool                    m_rtc_initialized = false;
-static float                   m_electrode_saadc_vals[3][NUM_MEASUREMENTS];
+static float                   m_electrode_saadc_vals[3][NUM_MEASUREMENTS*2];
+static float                   m_electrode_saadc_vals_temp[3][NUM_MEASUREMENTS*2];
 static uint16_t                m_electrode_measurement_counter = 0;
 static bool                    m_electrode_measurement_in_progress = false;
+static uint16_t                 m_saadc_ind_st = 0;
 static float                   vRef = 3.6;
 static float                   resCts = 16384; // 8-bit = 255, 10-bit = 1024, 12-bit = 4096, 14-bit = 16384
 
@@ -72,7 +74,28 @@ static void saadc_electrode_callback(nrf_drv_saadc_evt_t const * p_event)
         }
 
         // increment sample num and index
-        fill_index = (fill_index == (NUM_MEASUREMENTS-1)) ? 0 : (fill_index + 1);
+        if((fill_index >= NUM_MEASUREMENTS) && (fill_index < (NUM_MEASUREMENTS*2-1)))
+        {
+            m_saadc_ind_st = fill_index - NUM_MEASUREMENTS + 1;
+        }
+
+        // handle shifting to prevent overflow
+        if(fill_index == (NUM_MEASUREMENTS*2-1))
+        {
+            // copy whole array
+            memcpy(&m_electrode_saadc_vals_temp[0][0], &m_electrode_saadc_vals[0][0], sizeof(m_electrode_saadc_vals));
+            for (int y = 0; y < SAADC_SAMPLES_IN_BUFFER; y++)
+            {
+                memcpy(&m_electrode_saadc_vals[y][0], &m_electrode_saadc_vals_temp[y][NUM_MEASUREMENTS], NUM_MEASUREMENTS);
+            }
+            fill_index = NUM_MEASUREMENTS;
+            m_saadc_ind_st = 0;
+        }
+        else
+        {
+            fill_index += 1;
+        }
+       
         m_electrode_measurement_counter = (m_electrode_measurement_counter ==  NUM_MEASUREMENTS) 
                                           ? NUM_MEASUREMENTS : (m_electrode_measurement_counter + 1);
 
@@ -194,7 +217,7 @@ void vband_saadc_sample_electrode_channels(void)
     // SAADC always runs and continuously fills the buffer, just run the algorithm
     if (m_electrode_measurement_counter >= NUM_MEASUREMENTS)
     {
-        saadc_task_finished_fn(&m_electrode_saadc_vals[0][0], &m_electrode_saadc_vals[1][0], &m_electrode_saadc_vals[2][0], NUM_MEASUREMENTS);
+        saadc_task_finished_fn(&m_electrode_saadc_vals[0][m_saadc_ind_st], &m_electrode_saadc_vals[1][m_saadc_ind_st], &m_electrode_saadc_vals[2][m_saadc_ind_st], NUM_MEASUREMENTS);
     }
 }
 /** @} */
