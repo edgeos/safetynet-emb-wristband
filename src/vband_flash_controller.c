@@ -137,10 +137,26 @@ bool read_flash_active_mode(uint8_t * buf)
     return (m_active_mode.magic_number == FLASHWRITE_BLOCK_VALID) ? true : false;
 }
 
-void write_flash_ble_advertisement_name(uint8_t * buf, uint8_t len)
+void write_flash_all_params(void)
 {
     ret_code_t rc;
 
+    // write to flash, need to erase first, can take 85ms
+    rc = nrf_fstorage_erase(&fstorage, BLE_NAME_ADDRESS, 1, NULL);
+    APP_ERROR_CHECK(rc);
+    nrf_delay_ms(100);
+    rc = nrf_fstorage_write(&fstorage, BLE_NAME_ADDRESS, &m_ble_name, sizeof(m_ble_name), NULL);
+    APP_ERROR_CHECK(rc);
+    nrf_delay_ms(1);
+    rc = nrf_fstorage_write(&fstorage, ALARM_THRESHOLD_ADDRESS, &m_alarm_threshold, sizeof(m_alarm_threshold), NULL);
+    APP_ERROR_CHECK(rc);
+    nrf_delay_ms(1);
+    rc = nrf_fstorage_write(&fstorage, ACTIVE_MODE_ADDRESS, &m_active_mode, sizeof(m_active_mode), NULL);
+    APP_ERROR_CHECK(rc);
+}
+
+void write_flash_ble_advertisement_name(uint8_t * buf, uint8_t len)
+{
     memcpy(&m_ble_name.name, buf, len);
 
     // add spaces at end
@@ -153,45 +169,24 @@ void write_flash_ble_advertisement_name(uint8_t * buf, uint8_t len)
     m_ble_name.magic_number = FLASHWRITE_BLOCK_VALID;
     m_ble_name.config = BLE_NAME;
 
-    // write to flash, need to erase first
-    /*rc = nrf_fstorage_erase(&fstorage, BLE_NAME_ADDRESS, sizeof(m_ble_name), NULL);
-    APP_ERROR_CHECK(rc);
-    nrf_delay_ms(1);*/
-    rc = nrf_fstorage_write(&fstorage, BLE_NAME_ADDRESS, &m_ble_name, sizeof(m_ble_name), NULL);
-    APP_ERROR_CHECK(rc);
-    //wait_for_flash_ready(&fstorage);
+    write_flash_all_params();
 }
 
 void write_flash_alarm_threshold(float * buf)
 {
-    ret_code_t rc;
-
     memcpy(&m_alarm_threshold.threshold, buf, sizeof(float));
     m_alarm_threshold.magic_number = FLASHWRITE_BLOCK_VALID;
     m_alarm_threshold.config = ALARM_THRESHOLD;
 
-    // write to flash, need to erase first
-    /*rc = nrf_fstorage_erase(&fstorage, ALARM_THRESHOLD_ADDRESS, sizeof(m_alarm_threshold), NULL);
-    APP_ERROR_CHECK(rc);
-    nrf_delay_ms(1);*/
-    rc = nrf_fstorage_write(&fstorage, ALARM_THRESHOLD_ADDRESS, &m_alarm_threshold, sizeof(m_alarm_threshold), NULL);
-    APP_ERROR_CHECK(rc);
-    //wait_for_flash_ready(&fstorage);
+    write_flash_all_params();
 }
 
 void write_flash_active_mode(uint8_t * buf)
 {
-    ret_code_t rc;
-
     m_active_mode.mode = *buf;
     m_active_mode.magic_number = FLASHWRITE_BLOCK_VALID;
     m_active_mode.config = DEFAULT_MODE;
 
-    // write to flash, need to erase first
-    /*rc = nrf_fstorage_erase(&fstorage, ACTIVE_MODE_ADDRESS, sizeof(m_active_mode), NULL);
-    APP_ERROR_CHECK(rc);
-    nrf_delay_ms(1);*/
-    rc = nrf_fstorage_write(&fstorage, ACTIVE_MODE_ADDRESS, &m_active_mode, sizeof(m_active_mode), NULL);
-    APP_ERROR_CHECK(rc);
-    //wait_for_flash_ready(&fstorage);
+    write_flash_all_params();
 }
+

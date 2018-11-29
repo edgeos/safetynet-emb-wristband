@@ -60,6 +60,8 @@ bool read_flash_alarm_threshold(float * buf);
 
 bool read_flash_active_mode(uint8_t * buf);
 
+void write_flash_all_params(void);
+
 void write_flash_ble_advertisement_name(uint8_t * buf, uint8_t len);
 
 void write_flash_alarm_threshold(float * buf);
