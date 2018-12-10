@@ -16,7 +16,7 @@
 #include "voltage_alarm_algorithm.h"
 
 static float freqs_alert[NUM_TEST_FREQS]   = {50.0f, 60.0f};//, 50.0f};   // US and Europe Voltage Frequency
-static float mag_threshold[NUM_TEST_FREQS] = {100.0f, 100.0f};//, 30.0f};   // thresholds for the above freqs
+float mag_threshold[NUM_TEST_FREQS] = {200.0f, 200.0f};//, 30.0f};   // thresholds for the above freqs
 
 // for FFT-based algorithm
 static float m_fft_temp_input_f32[FFT_TEST_IN_SAMPLES_LEN];
@@ -26,6 +26,8 @@ static float m_fft_temp_f32[FFT_TEST_OUT_SAMPLES_LEN];
 static float m_pos_freq_fft_mag[FFT_TEST_OUT_SAMPLES_LEN/2];
 static float sine_wave[FFT_TEST_IN_SAMPLES_LEN];
 static float sine_wave_real[FFT_TEST_IN_SAMPLES_LEN/2];
+
+static bool running_algorithm = false;
 
 static void clear_FPU_interrupts(void)
 {
@@ -313,6 +315,8 @@ static bool check_for_alarm_state_change(bool ch1_alarm, bool ch2_alarm, bool ch
 bool check_for_voltage_detection(uint8_t *results_buf, float * adc_ch1, float * adc_ch2, float * adc_ch3, uint16_t len)
 {
     static voltage_algorithm_results results;
+    
+    running_algorithm = true;
 
     // configure toggle pin for latency testing
     static bool pin_cfg = false;
@@ -363,14 +367,17 @@ bool check_for_voltage_detection(uint8_t *results_buf, float * adc_ch1, float * 
     // copy to p_data, structure is memory aligned (pack(1))
     memcpy(results_buf, (uint8_t *) &results.overall_alarm, sizeof(results));
 
+    running_algorithm = false;
+
     // return alarm state
     return results.overall_alarm;
 }         
 
-void set_voltage_alarm_threshold(float threshold)
+void set_voltage_alarm_threshold(uint32_t * threshold)
 {
+    while (running_algorithm) {nrf_delay_us(1);}
     for(uint8_t i = 0; i < NUM_TEST_FREQS; i++)
     {
-        mag_threshold[i] = threshold;
+        mag_threshold[i] = *threshold*1.0f;
     }
 }                     

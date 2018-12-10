@@ -64,8 +64,9 @@ unsigned char ADXL362_Init(void)
 
     status = SPI_Init(0, 4000000, 0, 1);
     ADXL362_GetRegisterValue(&regValue, ADXL362_REG_PARTID, 1);
-    if((regValue != ADXL362_PART_ID))
+    if(regValue != ADXL362_PART_ID)
     {
+        ADXL362_GetRegisterValue(&regValue, ADXL362_REG_PARTID, 1);
         status = 0;
     }
 

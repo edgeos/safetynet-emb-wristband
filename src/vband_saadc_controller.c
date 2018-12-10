@@ -22,8 +22,8 @@
 #include "nrf_log_ctrl.h"
 #include "nrf_log_default_backends.h"
 
-#define SAADC_CALIBRATION_INTERVAL 5    // Determines how often the SAADC should be calibrated relative to NRF_DRV_SAADC_EVT_DONE event. E.g. value 5 will make the SAADC calibrate every fifth time the NRF_DRV_SAADC_EVT_DONE is received.
-#define SAADC_SAMPLES_IN_BUFFER    3    // Number of SAADC samples in RAM before returning a SAADC event. For low power SAADC set this constant to 1. Otherwise the EasyDMA will be enabled for an extended time which consumes high current.
+#define SAADC_SAMPLES_IN_BUFFER    4    // Number of SAADC samples in RAM before returning a SAADC event. For low power SAADC set this constant to 1. Otherwise the EasyDMA will be enabled for an extended time which consumes high current.
+#define SAADC_VOLTAGE_SAMPLES      3    
 #define SAADC_OVERSAMPLE           NRF_SAADC_OVERSAMPLE_DISABLED  //Oversampling setting for the SAADC. Setting oversample to 4x This will make the SAADC output a single averaged value when the SAMPLE task is triggered 4 times. Enable BURST mode to make the SAADC sample 4 times when triggering SAMPLE task once.
 #define SAADC_BURST_MODE           0    //Set to 1 to enable BURST mode, otherwise set to 0.
 
@@ -40,11 +40,12 @@ static float                   m_electrode_saadc_vals[3][NUM_MEASUREMENTS*2];
 static float                   m_electrode_saadc_vals_temp[3][NUM_MEASUREMENTS*2];
 static uint16_t                m_electrode_measurement_counter = 0;
 static bool                    m_electrode_measurement_in_progress = false;
-static uint16_t                 m_saadc_ind_st = 0;
+static uint16_t                m_saadc_ind_st = 0;
 static float                   vRef = 3.6;
 static float                   resCts = 16384; // 8-bit = 255, 10-bit = 1024, 12-bit = 4096, 14-bit = 16384
 
 static saadc_finished_fnptr_t saadc_task_finished_fn = NULL;
+static float battery_voltage = 0;
 
 static void clear_FPU_interrupts(void)
 {
@@ -66,12 +67,16 @@ static void saadc_electrode_callback(nrf_drv_saadc_evt_t const * p_event)
         err_code = nrf_drv_saadc_buffer_convert(p_event->data.done.p_buffer, SAADC_SAMPLES_IN_BUFFER);  //Set buffer so the SAADC can write to it again. This is either "buffer 1" or "buffer 2"
         APP_ERROR_CHECK(err_code);
 
-        for (int i = 0; i < SAADC_SAMPLES_IN_BUFFER; i++)
+        // the first 3 cahnels are the waves for detecting HV
+        for (int i = 0; i < SAADC_VOLTAGE_SAMPLES; i++)
         {
             // convert to float and stuff in array
-            m_electrode_saadc_vals[i][fill_index] = (vRef*p_event->data.done.p_buffer[i])/resCts;         
+            m_electrode_saadc_vals[i][fill_index] = (2.7f*p_event->data.done.p_buffer[i])/resCts;         
             clear_FPU_interrupts();
         }
+
+        // the 4th channel is the battery voltage
+        battery_voltage = battery_voltage*0.9f + 0.1f*(3.6f*p_event->data.done.p_buffer[SAADC_SAMPLES_IN_BUFFER-1])/resCts;
 
         // increment sample num and index
         if((fill_index >= NUM_MEASUREMENTS) && (fill_index < (NUM_MEASUREMENTS*2-1)))
@@ -84,7 +89,7 @@ static void saadc_electrode_callback(nrf_drv_saadc_evt_t const * p_event)
         {
             // copy whole array
             memcpy(&m_electrode_saadc_vals_temp[0][0], &m_electrode_saadc_vals[0][0], sizeof(m_electrode_saadc_vals));
-            for (int y = 0; y < SAADC_SAMPLES_IN_BUFFER; y++)
+            for (int y = 0; y < SAADC_VOLTAGE_SAMPLES; y++)
             {
                 memcpy(&m_electrode_saadc_vals[y][0], &m_electrode_saadc_vals_temp[y][NUM_MEASUREMENTS], NUM_MEASUREMENTS);
             }
@@ -125,6 +130,13 @@ static void vband_saadc_electrode_channels_init(void)
     nrf_saadc_channel_config_t channel_config2 =
         NRF_DRV_SAADC_DEFAULT_CHANNEL_CONFIG_SE(NRF_SAADC_INPUT_AIN6);
 	
+    channel_config0.gain =  channel_config1.gain =  channel_config2.gain = NRF_SAADC_GAIN1_4;
+    channel_config0.reference = channel_config1.reference = channel_config2.reference = NRF_SAADC_REFERENCE_VDD4;
+
+    // battery VDD, can use defaults
+    nrf_saadc_channel_config_t channel_config3 =
+        NRF_DRV_SAADC_DEFAULT_CHANNEL_CONFIG_SE(NRF_SAADC_INPUT_VDD);
+
     //Configure SAADC
     saadc_config.resolution = NRF_SAADC_RESOLUTION_14BIT;                                 //Set SAADC resolution to 12-bit. This will make the SAADC output values from 0 (when input voltage is 0V) to 2^12=2048 (when input voltage is 3.6V for channel gain setting of 1/6).
     saadc_config.oversample = SAADC_OVERSAMPLE;                                           //Set oversample to 4x. This will make the SAADC output a single averaged value when the SAMPLE task is triggered 4 times.
@@ -140,13 +152,16 @@ static void vband_saadc_electrode_channels_init(void)
     err_code = nrf_drv_saadc_channel_init(1, &channel_config1);                            //Initialize SAADC channel 0 with the channel configuration
     APP_ERROR_CHECK(err_code);
     err_code = nrf_drv_saadc_channel_init(2, &channel_config2);                            //Initialize SAADC channel 0 with the channel configuration
+    APP_ERROR_CHECK(err_code);	
+    err_code = nrf_drv_saadc_channel_init(3, &channel_config3);                            //Initialize SAADC channel 0 with the channel configuration
     APP_ERROR_CHECK(err_code);
-		
+
     if(SAADC_BURST_MODE)
     {
         NRF_SAADC->CH[0].CONFIG |= 0x01000000;                                            //Configure burst mode for channel 0. Burst is useful together with oversampling. When triggering the SAMPLE task in burst mode, the SAADC will sample "Oversample" number of times as fast as it can and then output a single averaged value to the RAM buffer. If burst mode is not enabled, the SAMPLE task needs to be triggered "Oversample" number of times to output a single averaged value to the RAM buffer.		
         NRF_SAADC->CH[1].CONFIG |= 0x01000000; 
         NRF_SAADC->CH[2].CONFIG |= 0x01000000; 
+        NRF_SAADC->CH[3].CONFIG |= 0x01000000; 
     }
 
     err_code = nrf_drv_saadc_buffer_convert(m_buffer_pool[0], SAADC_SAMPLES_IN_BUFFER);
@@ -219,5 +234,10 @@ void vband_saadc_sample_electrode_channels(void)
     {
         saadc_task_finished_fn(&m_electrode_saadc_vals[0][m_saadc_ind_st], &m_electrode_saadc_vals[1][m_saadc_ind_st], &m_electrode_saadc_vals[2][m_saadc_ind_st], NUM_MEASUREMENTS);
     }
+}
+
+void vband_saadc_sample_battery_voltage(float *battery_volt)
+{
+    *battery_volt = battery_voltage;
 }
 /** @} */

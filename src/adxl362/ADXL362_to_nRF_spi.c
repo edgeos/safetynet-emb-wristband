@@ -128,7 +128,7 @@ unsigned char SPI_Init(unsigned char lsbFirst,
     spi_config.miso_pin  = SPI_MISO_PIN_ADXL362;
     spi_config.mosi_pin  = SPI_MOSI_PIN_ADXL362;
     spi_config.sck_pin   = SPI_SCK_PIN_ADXL362;
-    spi_config.frequency = NRF_DRV_SPI_FREQ_1M; //NRF_DRV_SPI_FREQ_4M; 
+    spi_config.frequency = NRF_DRV_SPI_FREQ_1M;//NRF_DRV_SPI_FREQ_1M; //NRF_DRV_SPI_FREQ_4M; 
     APP_ERROR_CHECK(nrf_drv_spi_init(&p_spi_master_0, &spi_config, spi_event_handler, NULL));
 
     return 1;

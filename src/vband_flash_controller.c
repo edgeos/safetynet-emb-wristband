@@ -125,9 +125,9 @@ bool read_flash_ble_advertisement_name(uint8_t * buf)
     return (m_ble_name.magic_number == FLASHWRITE_BLOCK_VALID) ? true : false;
 }
 
-bool read_flash_alarm_threshold(float * buf)
+bool read_flash_alarm_threshold(uint32_t * buf)
 {
-    memcpy(buf, &m_alarm_threshold.threshold, sizeof(float));
+    memcpy(buf, &m_alarm_threshold.threshold, sizeof(uint32_t));
     return (m_alarm_threshold.magic_number == FLASHWRITE_BLOCK_VALID) ? true : false;
 }
 
@@ -172,9 +172,9 @@ void write_flash_ble_advertisement_name(uint8_t * buf, uint8_t len)
     write_flash_all_params();
 }
 
-void write_flash_alarm_threshold(float * buf)
+void write_flash_alarm_threshold(uint32_t * buf)
 {
-    memcpy(&m_alarm_threshold.threshold, buf, sizeof(float));
+    memcpy(&m_alarm_threshold.threshold, buf, sizeof(uint32_t));
     m_alarm_threshold.magic_number = FLASHWRITE_BLOCK_VALID;
     m_alarm_threshold.config = ALARM_THRESHOLD;
 

@@ -69,6 +69,8 @@ void saadc_assign_callback_fn(saadc_finished_fnptr_t fn);
  */
 void vband_saadc_sample_electrode_channels(void);
 
+void vband_saadc_sample_battery_voltage(float *battery_voltage);
+
 #ifdef __cplusplus
 }
 #endif

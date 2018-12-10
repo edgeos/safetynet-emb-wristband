@@ -42,7 +42,7 @@ bool check_for_voltage_detection(uint8_t *results_buf,
                                  float * adc_ch3, 
                                  uint16_t len);
 
-void set_voltage_alarm_threshold(float threshold);
+void set_voltage_alarm_threshold(uint32_t * threshold);
 
 #ifdef __cplusplus
 }

@@ -54,7 +54,7 @@ extern "C" {
 #define LEDS_ACTIVE_STATE 1
 #define LEDS_LIST         { LED_1 }
 #define LEDS_INV_MASK     LEDS_MASK
-#define BSP_LED_0         17
+#define BSP_LED_0         LED_1
 
 // Buttons definitions; needed for boards.c
 #define BUTTONS_NUMBER       1
@@ -73,7 +73,7 @@ extern "C" {
 #define SPI_MOSI_PIN_ADXL362  NRF_GPIO_PIN_MAP(0, 17)
 #define SPI_SS_PIN_ADXL362    NRF_GPIO_PIN_MAP(0, 13)
 #define ADXL362_POWER_ON      NRF_GPIO_PIN_MAP(0, 26)
-#define ADXL362_INT1          NRF_GPIO_PIN_MAP(1, 5)
+#define ADXL362_INT1          NRF_GPIO_PIN_MAP(1, 5) //NRF_GPIO_PIN_MAP(1, 5)
 #define ADXL362_INT2          NRF_GPIO_PIN_MAP(1, 6)
 
 #ifdef __cplusplus

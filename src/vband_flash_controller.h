@@ -40,7 +40,7 @@ typedef struct
 {
     uint32_t magic_number;
     config_param_type_t config;
-    float threshold;
+    uint32_t threshold;
     uint8_t pad[3]; // flash writes must be in size (in bytes) that is multiple of 4
 } alarm_threshold_param_t;
 
@@ -56,7 +56,7 @@ void initialize_flash(void);
 
 bool read_flash_ble_advertisement_name(uint8_t * buf);
 
-bool read_flash_alarm_threshold(float * buf);
+bool read_flash_alarm_threshold(uint32_t * buf);
 
 bool read_flash_active_mode(uint8_t * buf);
 
@@ -64,7 +64,7 @@ void write_flash_all_params(void);
 
 void write_flash_ble_advertisement_name(uint8_t * buf, uint8_t len);
 
-void write_flash_alarm_threshold(float * buf);
+void write_flash_alarm_threshold(uint32_t * buf);
 
 void write_flash_active_mode(uint8_t * buf);
 

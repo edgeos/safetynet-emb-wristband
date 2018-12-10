@@ -228,9 +228,9 @@ static int8_t bme280_stream_sensor_data_forced_mode(struct bme280_dev *dev, uint
 
     // package for BLE
     memcpy(&data_buffer[0], &comp_data.temperature, sizeof(comp_data.temperature));
-    memcpy(&data_buffer[2], &comp_data.humidity, sizeof(comp_data.humidity));
-    memcpy(&data_buffer[4], &comp_data.pressure, sizeof(comp_data.pressure));
-    data_buffer_length = 6;
+    memcpy(&data_buffer[4], &comp_data.humidity, sizeof(comp_data.humidity));
+    memcpy(&data_buffer[8], &comp_data.pressure, sizeof(comp_data.pressure));
+    data_buffer_length = 12;
 
     // assign pointers
     memcpy(p_data, &data_buffer[0], data_buffer_length);

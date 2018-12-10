@@ -129,8 +129,8 @@
 #define MAX_BATTERY_LEVEL                   100                                     /**< Maximum simulated battery level. */
 #define BATTERY_LEVEL_INCREMENT             1                                       /**< Increment between each simulated battery level measurement. */
 
-#define MIN_CONN_INTERVAL                   MSEC_TO_UNITS(100, UNIT_1_25_MS)        /**< Minimum acceptable connection interval (0.4 seconds). */
-#define MAX_CONN_INTERVAL                   MSEC_TO_UNITS(200, UNIT_1_25_MS)        /**< Maximum acceptable connection interval (0.65 second). */
+#define MIN_CONN_INTERVAL                   MSEC_TO_UNITS(70, UNIT_1_25_MS)        /**< Minimum acceptable connection interval (0.4 seconds). */
+#define MAX_CONN_INTERVAL                   MSEC_TO_UNITS(140, UNIT_1_25_MS)        /**< Maximum acceptable connection interval (0.65 second). */
 #define SLAVE_LATENCY                       0                                       /**< Slave latency. */
 #define CONN_SUP_TIMEOUT                    MSEC_TO_UNITS(4000, UNIT_10_MS)         /**< Connection supervisory time-out (4 seconds). */
 
@@ -196,8 +196,8 @@ static void advertising_start(void * p_erase_bonds);
 static void update_advertising(void);
 static void update_vband_config_characteristic(void);
 
-//Adding new global variable that will be like pointer of ussed buffer
-uint8_t     P_buffer = 0;
+bool        is_new_alarm_threshold = false;
+uint32_t    new_alarm_threshold = 0;
 
 /**@brief Callback function for asserts in the SoftDevice.
  *
@@ -245,10 +245,31 @@ static void pm_evt_handler(pm_evt_t const * p_evt)
 static void battery_level_update(void)
 {
     ret_code_t err_code;
-    uint8_t  battery_level;
+    static uint8_t battery_level;
+    float battery_voltage;
 
+#ifdef BOARD_VBAND_V1
+    vband_saadc_sample_battery_voltage(&battery_voltage);
+    if (battery_voltage >= 2.65f)
+    {
+        battery_level = 100-(2.7f-battery_voltage)/30;
+    }
+    else if (battery_voltage >= 2.60f)
+    {
+        battery_level = 70-(2.65f-battery_voltage)/20;
+    }
+    else if (battery_voltage >= 2.55f)
+    {
+        battery_level = 50-(2.60f-battery_voltage)/40;
+    }
+    else
+    {
+        battery_level = 10-(2.55f-battery_voltage)/10;
+    }
+#else
     battery_level = (uint8_t)sensorsim_measure(&m_battery_sim_state, &m_battery_sim_cfg);
-
+#endif
+    
     err_code = ble_bas_battery_level_update(&m_bas, battery_level, BLE_CONN_HANDLE_ALL);
     if ((err_code != NRF_SUCCESS) &&
         (err_code != NRF_ERROR_INVALID_STATE) &&
@@ -266,6 +287,18 @@ static void battery_level_update(void)
 static void vband_characteristic_update(ble_vband_char_update_t char_update, uint8_t * p_data, uint16_t * p_length)
 {
     ret_code_t err_code;
+
+    if (m_current_vband_mode == BLE_VBAND_SRV_MODE_NORMAL)
+    {
+        if (char_update == ble_vband_srv_alarm_update)
+        {
+            *p_length = 4; // don't send waveforms during normal mode
+        }
+        else if (char_update == ble_vband_srv_accelerometer_update)
+        {
+            return; // don't send accelerometer data during normal mode
+        }
+    }
 
     err_code = char_update(&m_vband, p_data, p_length, m_conn_handle); 
     if ((err_code != NRF_SUCCESS) &&
@@ -417,10 +450,12 @@ static void vband_data_handler(ble_vband_srv_evt_t * p_evt)
                 break;
             case ALARM_THRESHOLD:
                 // write to flash
-                write_flash_alarm_threshold((float*)&buf[1]);
-  
-                // update in algorithm
-                set_voltage_alarm_threshold(buf[1]);
+                write_flash_alarm_threshold((uint32_t *)&buf[1]);
+                nrf_delay_ms(10);
+
+                // update in algorithm, must be thread-safe
+                is_new_alarm_threshold = true;
+                memcpy(&new_alarm_threshold, (uint32_t *)&buf[1], sizeof(uint32_t));
                 break;
             case DEFAULT_MODE:
                 // write to flash
@@ -988,7 +1023,7 @@ static void update_vband_config_characteristic(void)
     memset(&p_data[0],0,BLE_VBAND_CONFIG_DATA_LEN);
     p_data[0] = m_current_vband_mode;
 
-    read_flash_alarm_threshold((float *)&p_data[1]);
+    read_flash_alarm_threshold((uint32_t *)&p_data[1]);
     vband_characteristic_update(ble_vband_srv_config_update, &p_data[0], &p_data_length);
 }
 
@@ -1114,10 +1149,14 @@ static void external_sensor_init(void)
 {
     BaseType_t xReturned;
 
+#ifdef BOARD_PCA10056
     // initialize i2c + spi sensors
-    //vband_sensor_init(BME280 | MAX30105 | ADXL362);
-    vband_sensor_init(BME280 | CCS811 | MAX30105 | SIMULATE);
+    vband_sensor_init(BME280 | MAX30105 | ADXL362);
+#else
     //vband_sensor_init(ADXL362);
+    vband_sensor_init(ADXL362 | BME280 | MAX30105 | SIMULATE);
+#endif
+    
 
     // start tasks for each sensor
     xReturned = xTaskCreate(ccs811_measure_task, "CCS811", configMINIMAL_STACK_SIZE + 200, NULL, 1, &ccs811_measure_task_handle);
@@ -1156,6 +1195,12 @@ static void saadc_sample_task (void * pvParameter)
     UNUSED_PARAMETER(pvParameter);
     while(1)
     {
+        if(is_new_alarm_threshold)
+        {
+            set_voltage_alarm_threshold(&new_alarm_threshold);
+            is_new_alarm_threshold = false;
+        }
+
         if(xSemaphoreTake(i2c_semaphore,wakeup_interval))
         {
             vband_saadc_sample_electrode_channels();
@@ -1198,6 +1243,7 @@ static void saadc_run_voltage_alarm_algorithm(float * adc_ch1, float * adc_ch2, 
     // update ble
     if (m_ble_connected_bool)
     {
+        p_data_length = sizeof(results);
         vband_characteristic_update(ble_vband_srv_alarm_update, &p_data[0], &p_data_length);
     }
 }
@@ -1260,10 +1306,16 @@ int main(void)
     }
 
     // Set alarm threshold from flash
-    float flash_alarm_threshold = 0.0f;
+    uint32_t flash_alarm_threshold = 0;
     if (read_flash_alarm_threshold(&flash_alarm_threshold))
     {
-        set_voltage_alarm_threshold(flash_alarm_threshold);
+        set_voltage_alarm_threshold(&flash_alarm_threshold);
+    }
+
+    // Set engineering mode from flash
+    if (!read_flash_active_mode(&m_current_vband_mode))
+    {
+        m_current_vband_mode = BLE_VBAND_SRV_MODE_NORMAL; // if invalid flash default to normal mode
     }
 
     // Configure and initialize the BLE stack.
@@ -1288,9 +1340,6 @@ int main(void)
     // The task will run advertising_start() before entering its loop.
     //pm_peers_delete();
     nrf_sdh_freertos_init(advertising_start, &erase_bonds);
-
-    // go to low power mode
-    //sd_power_mode_set(NRF_POWER_MODE_LOWPWR);
 
     NRF_LOG_INFO("Voltage Band FreeRTOS Scheduler started.");
     // Start FreeRTOS scheduler.
