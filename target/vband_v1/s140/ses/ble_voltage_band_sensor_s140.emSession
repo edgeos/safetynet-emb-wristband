@@ -2,7 +2,8 @@
 <session>
  <Bookmarks/>
  <Breakpoints groups="Breakpoints" active_group="Breakpoints">
-  <BreakpointListItem trigger="" line="123" counter="0" hardwareBreakpoint="" isFunctionBreakpoint="false" action="" expression="" group="Breakpoints" type="Breakpoint" state="4" filename="../../../../nordic_sdk/integration/nrfx/legacy/nrf_drv_spi.h" useHWbreakpoint="false"/>
+  <BreakpointListItem trigger="" line="1322" counter="0" hardwareBreakpoint="" isFunctionBreakpoint="false" action="" expression="" group="Breakpoints" type="Breakpoint" state="2" filename="../../../../src/vband_main.c" useHWbreakpoint="false"/>
+  <BreakpointListItem trigger="" line="293" counter="0" hardwareBreakpoint="" isFunctionBreakpoint="false" action="" expression="" group="Breakpoints" type="Breakpoint" state="2" filename="../../../../src/vband_main.c" useHWbreakpoint="false"/>
  </Breakpoints>
  <ExecutionProfileWindow/>
  <FrameBufferWindow>
@@ -10,7 +11,7 @@
  </FrameBufferWindow>
  <Memory1>
   <MemoryWindow addressSpace="" dataSize="1" autoEvaluate="0" viewMode="0" addressOrder="0" columnsText="" refreshPeriod="0" name="ble_app_hrs_freertos_pca10056_s140" radix="16" sizeText="" addressText=""/>
-  <MemoryWindow addressSpace="" dataSize="1" autoEvaluate="0" viewMode="0" addressOrder="0" columnsText="" refreshPeriod="0" name="ble_voltage_band_sensor_s140" radix="16" sizeText="" addressText=""/>
+  <MemoryWindow addressSpace="" dataSize="1" autoEvaluate="0" viewMode="0" addressOrder="0" columnsText="" refreshPeriod="0" name="ble_voltage_band_sensor_s140" radix="16" sizeText="" addressText="0x2000a27c"/>
  </Memory1>
  <Memory2>
   <MemoryWindow addressSpace="" dataSize="1" autoEvaluate="0" viewMode="0" addressOrder="0" columnsText="" refreshPeriod="0" name="ble_app_hrs_freertos_pca10056_s140" radix="16" sizeText="" addressText=""/>
@@ -62,7 +63,10 @@
    <Watchpoint numelements="100" expression="m_rx_data_spi" evalMode="2" name="m_rx_data_spi" radix="-1" linenumber="49" filename="../../../../src/accel_adxl362/adxl362.c" list=""/>
    <Watchpoint numelements="3" expression="xyz_data" evalMode="2" name="xyz_data" radix="-1" linenumber="49" filename="../../../../src/accel_adxl362/adxl362.c" list=""/>
    <Watchpoint numelements="0" expression="line_num" evalMode="0" name="line_num" radix="16" linenumber="47" filename="../../../../nordic_sdk/components/libraries/util/app_error_handler_gcc.c" list=""/>
-   <Watchpoint numelements="256" expression="m_pos_freq_fft_mag" evalMode="2" name="m_pos_freq_fft_mag" radix="-1" linenumber="156" filename="../../../../src/voltage_alarm_algorithm.c" list=""/>
+   <Watchpoint numelements="256" expression="m_pos_freq_fft_mag" evalMode="2" name="m_pos_freq_fft_mag" radix="-1" linenumber="158" filename="../../../../src/voltage_alarm_algorithm.c" list=""/>
+   <Watchpoint numelements="0" expression="p_event" evalMode="1" name="p_event" radix="-1" linenumber="67" filename="../../../../src/vband_saadc_controller.c" list=""/>
+   <Watchpoint numelements="0" expression="battery_voltage" evalMode="0" name="battery_voltage" radix="10" linenumber="79" filename="../../../../src/vband_saadc_controller.c" list=""/>
+   <Watchpoint numelements="0" expression="battery_level" evalMode="0" name="battery_level" radix="-1" linenumber="248" filename="../../../../src/vband_main.c" list=""/>
   </Watches>
  </Watch1>
  <Watch2>
@@ -75,41 +79,49 @@
   <Watches active="0" update="Never"/>
  </Watch4>
  <Files>
-  <SessionOpenFile windowGroup="DockEditLeft" x="3" y="1019" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../src/vband_main.c" selected="0" top="991" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="59" y="1341" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../src/vband_main.c" selected="0" top="1314" codecName="Default"/>
   <SessionOpenFile windowGroup="DockEditLeft" x="0" y="39" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../nordic_sdk/components/boards/boards.c" selected="0" top="15" codecName="Default"/>
-  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="82" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../nordic_sdk/components/boards/boards.h" selected="0" top="51" codecName="Default"/>
-  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="43" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../include/custom_board.h" selected="0" top="15" codecName="Default"/>
-  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="63" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../include/vband_v1.h" selected="0" top="57" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="0" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../nordic_sdk/components/boards/boards.h" selected="0" top="39" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="26" y="42" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../include/custom_board.h" selected="0" top="15" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="8" y="74" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../include/vband_v1.h" selected="0" top="36" codecName="Default"/>
   <SessionOpenFile windowGroup="DockEditLeft" x="0" y="12408" useTextEdit="1" useBinaryEdit="0" left="0" path="../config/sdk_config.h" selected="0" top="12390" codecName="Default"/>
-  <SessionOpenFile windowGroup="DockEditLeft" x="40" y="202" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../src/vband_ext_sensor_controller.c" selected="1" top="190" codecName="Default"/>
-  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="90" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../src/vband_saadc_controller.c" selected="0" top="60" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="16" y="414" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../src/vband_ext_sensor_controller.c" selected="0" top="5" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="5" y="223" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../src/vband_saadc_controller.c" selected="0" top="195" codecName="Default"/>
   <SessionOpenFile windowGroup="DockEditLeft" x="0" y="41" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../nordic_sdk/components/drivers_nrf/nrf_soc_nosd/nrf_nvic.c" selected="0" top="0" codecName="Default"/>
   <SessionOpenFile windowGroup="DockEditLeft" x="0" y="0" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../nordic_sdk/components/drivers_nrf/nrf_soc_nosd/nrf_error.h" selected="0" top="21" codecName="Default"/>
   <SessionOpenFile windowGroup="DockEditLeft" x="0" y="69" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../nordic_sdk/components/libraries/button/app_button.c" selected="0" top="61" codecName="Default"/>
   <SessionOpenFile windowGroup="DockEditLeft" x="0" y="26" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../nordic_sdk/components/libraries/util/app_util_platform.c" selected="0" top="15" codecName="Default"/>
-  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="18" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../src/voltage_alarm_algorithm.c" selected="0" top="277" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="31" y="316" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../src/voltage_alarm_algorithm.c" selected="0" top="304" codecName="Default"/>
   <SessionOpenFile windowGroup="DockEditLeft" x="0" y="240" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../src/vband_pwm_controller.c" selected="0" top="198" codecName="Default"/>
-  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="22" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../src/voltage_alarm_algorithm.h" selected="0" top="0" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="8" y="27" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../src/voltage_alarm_algorithm.h" selected="0" top="18" codecName="Default"/>
   <SessionOpenFile windowGroup="DockEditLeft" x="0" y="124" useTextEdit="1" useBinaryEdit="0" left="0" path="ble_voltage_band_sensor_s140.emProject" selected="0" top="0" codecName="Default"/>
-  <SessionOpenFile windowGroup="DockEditLeft" x="23" y="34" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../src/vband_flash_controller.c" selected="0" top="5" codecName="Default"/>
-  <SessionOpenFile windowGroup="DockEditLeft" x="4" y="26" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../src/vband_flash_controller.h" selected="0" top="21" codecName="Default"/>
-  <SessionOpenFile windowGroup="DockEditLeft" x="4" y="56" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../src/vband_ext_sensor_controller.h" selected="0" top="30" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="5" y="133" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../src/vband_flash_controller.c" selected="0" top="93" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="5" y="66" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../src/vband_flash_controller.h" selected="0" top="38" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="56" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../src/vband_ext_sensor_controller.h" selected="0" top="30" codecName="Default"/>
   <SessionOpenFile windowGroup="DockEditLeft" x="0" y="838" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../nordic_sdk/components/softdevice/s140/headers/ble_gap.h" selected="0" top="817" codecName="Default"/>
   <SessionOpenFile windowGroup="DockEditLeft" x="0" y="55" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../nordic_sdk/modules/nrfx/hal/nrf_nvmc.c" selected="0" top="0" codecName="Default"/>
   <SessionOpenFile windowGroup="DockEditLeft" x="0" y="428" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../nordic_sdk/components/toolchain/cmsis/include/cmsis_gcc.h" selected="0" top="396" codecName="Default"/>
-  <SessionOpenFile windowGroup="DockEditLeft" x="63" y="133" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../nordic_sdk/components/libraries/fstorage/nrf_fstorage.c" selected="0" top="58" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="133" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../nordic_sdk/components/libraries/fstorage/nrf_fstorage.c" selected="0" top="103" codecName="Default"/>
   <SessionOpenFile windowGroup="DockEditLeft" x="0" y="147" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../nordic_sdk/components/libraries/hardfault/hardfault_implementation.c" selected="0" top="115" codecName="Default"/>
-  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="99" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../nordic_sdk/components/libraries/util/app_error_weak.c" selected="0" top="38" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="99" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../nordic_sdk/components/libraries/util/app_error_weak.c" selected="0" top="79" codecName="Default"/>
   <SessionOpenFile windowGroup="DockEditLeft" x="0" y="48" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../nordic_sdk/components/libraries/util/app_error_handler_gcc.c" selected="0" top="0" codecName="Default"/>
   <SessionOpenFile windowGroup="DockEditLeft" x="0" y="157" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../nordic_sdk/components/libraries/util/sdk_errors.h" selected="0" top="99" codecName="Default"/>
-  <SessionOpenFile windowGroup="DockEditLeft" x="8" y="77" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../nordic_sdk/components/softdevice/s140/headers/nrf_error.h" selected="0" top="39" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="77" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../nordic_sdk/components/softdevice/s140/headers/nrf_error.h" selected="0" top="39" codecName="Default"/>
   <SessionOpenFile windowGroup="DockEditLeft" x="0" y="507" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../nordic_sdk/components/libraries/fstorage/nrf_fstorage_sd.c" selected="0" top="505" codecName="Default"/>
   <SessionOpenFile windowGroup="DockEditLeft" x="0" y="331" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../nordic_sdk/components/libraries/fstorage/nrf_fstorage.h" selected="0" top="300" codecName="Default"/>
   <SessionOpenFile windowGroup="DockEditLeft" x="0" y="258" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../nordic_sdk/components/ble/ble_services/ble_nus/ble_nus.c" selected="0" top="229" codecName="Default"/>
-  <SessionOpenFile windowGroup="DockEditLeft" x="9" y="392" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../src/ble_vband_srv.c" selected="0" top="364" codecName="Default"/>
-  <SessionOpenFile windowGroup="DockEditLeft" x="31" y="23" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../src/ble_vband_srv.h" selected="0" top="5" codecName="Default"/>
-  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="0" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../nordic_sdk/components/boards/boards.h" selected="0" top="39" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="27" y="178" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../src/ble_vband_srv.c" selected="0" top="158" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="4" y="56" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../src/ble_vband_srv.h" selected="0" top="56" codecName="Default"/>
   <SessionOpenFile windowGroup="DockEditLeft" x="0" y="0" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../src/ccs811/ccs811.c" selected="0" top="0" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="80" y="49" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../src/adxl362/ADXL362.c" selected="0" top="46" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="46" y="130" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../src/adxl362/ADXL362_to_nRF_spi.c" selected="1" top="88" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="77" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../nordic_sdk/integration/nrfx/legacy/nrf_drv_gpiote.h" selected="0" top="48" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="144" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../nordic_sdk/modules/nrfx/drivers/include/nrfx_gpiote.h" selected="0" top="115" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="85" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../nordic_sdk/integration/nrfx/legacy/nrf_drv_saadc.h" selected="0" top="64" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="91" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../nordic_sdk/modules/nrfx/drivers/include/nrfx_saadc.h" selected="0" top="54" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="139" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../nordic_sdk/modules/nrfx/hal/nrf_saadc.h" selected="0" top="92" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="71" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../src/vband_saadc_controller.h" selected="0" top="36" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="154" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../nordic_sdk/integration/nrfx/legacy/nrf_drv_spi.h" selected="0" top="150" codecName="Default"/>
  </Files>
  <ARMCrossStudioWindow activeProject="ble_voltage_band_sensor_s140" fileDialogDefaultFilter="*.h" autoConnectTarget="J-Link" buildConfiguration="Debug" debugSearchFileMap="../../../Include/arm_math.h&#xa;&#xa;../ComplexMathFunctions/arm_cmplx_mag_f32.c&#xa;&#xa;../TransformFunctions/arm_bitreversal2.S&#xa;&#xa;../TransformFunctions/arm_cfft_f32.c&#xa;&#xa;../TransformFunctions/arm_cfft_radix8_f32.c&#xa;" fileDialogInitialDirectory="D:/Contracting/GE/2018_Fall/git_repo/safetynet-emb-wristband/src" debugSearchPath="" autoConnectCapabilities="3711"/>
 </session>

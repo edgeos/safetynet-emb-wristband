@@ -1151,7 +1151,7 @@ static void external_sensor_init(void)
 
 #ifdef BOARD_PCA10056
     // initialize i2c + spi sensors
-    vband_sensor_init(BME280 | MAX30105 | ADXL362);
+    vband_sensor_init(BME280 | MAX30105 | ADXL362 | SIMULATE);
 #else
     //vband_sensor_init(ADXL362);
     vband_sensor_init(ADXL362 | BME280 | MAX30105 | SIMULATE);
