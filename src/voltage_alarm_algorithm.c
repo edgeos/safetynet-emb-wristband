@@ -16,7 +16,7 @@
 #include "voltage_alarm_algorithm.h"
 
 static float freqs_alert[NUM_TEST_FREQS]   = {50.0f, 60.0f};//, 50.0f};   // US and Europe Voltage Frequency
-float mag_threshold[NUM_TEST_FREQS] = {200.0f, 200.0f};//, 30.0f};   // thresholds for the above freqs
+float mag_threshold[NUM_TEST_FREQS] = {300.0f, 300.0f};//, 30.0f};   // thresholds for the above freqs
 
 // for FFT-based algorithm
 static float m_fft_temp_input_f32[FFT_TEST_IN_SAMPLES_LEN];

@@ -114,7 +114,7 @@
 #define ADXL362_MEASURE_INTERVAL                    75                                      /**< ADXL362 measurement interval (ms). */
 #define ADXL362_INACTIVITY_WHILE_CONNECTED_TIMEOUT  600                                     /**< ADXL362 sleep interval while connected (seconds). */
 
-#define DEVICE_NAME                         "GE GRC Wristband"                      /**< Name of device. Will be included in the advertising data. */
+#define DEVICE_NAME                         "GE GRC Wrist 2"                      /**< Name of device. Will be included in the advertising data. */
 #define MANUFACTURER_NAME                   "GE"                                    /**< Manufacturer. Will be passed to Device Information Service. */
 #define VBAND_SERVICE_UUID_TYPE             BLE_UUID_TYPE_VENDOR_BEGIN              /**< UUID type for the Voltage Band Service (vendor specific). */
 
@@ -122,7 +122,11 @@
 #define APP_BLE_CONN_CFG_TAG                1                                       /**< A tag identifying the SoftDevice BLE configuration. */
 
 #define APP_ADV_INTERVAL                    160                                     /**< The advertising interval (in units of 0.625 ms. This value corresponds to 1000 ms). */
+#ifdef BOARD_VBAND_V1
+#define APP_ADV_DURATION                    3000 //180000                                    /**< The advertising duration (60 seconds) in units of 10 milliseconds. */
+#else
 #define APP_ADV_DURATION                    3000                                    /**< The advertising duration (60 seconds) in units of 10 milliseconds. */
+#endif
 
 #define BATTERY_LEVEL_MEAS_INTERVAL         2000                                    /**< Battery level measurement interval (ms). */
 #define MIN_BATTERY_LEVEL                   81                                      /**< Minimum simulated battery level. */
@@ -166,7 +170,7 @@ static sensorsim_state_t m_battery_sim_state;                       /**< Battery
 static bool m_ble_connected_bool = false;
 
 static char m_ble_advertising_name[MAX_BLE_NAME_LENGTH] = {0};
-static ble_vband_srv_config_mode_t m_current_vband_mode = BLE_VBAND_SRV_MODE_NORMAL;
+static ble_vband_srv_config_mode_t m_current_vband_mode = BLE_VBAND_SRV_MODE_ENGINEERING;//BLE_VBAND_SRV_MODE_NORMAL;
 
 
 static ble_uuid_t m_adv_uuids[] =                                   /**< Universally unique service identifiers. */
@@ -1151,7 +1155,7 @@ static void external_sensor_init(void)
 
 #ifdef BOARD_PCA10056
     // initialize i2c + spi sensors
-    vband_sensor_init(BME280 | MAX30105 | ADXL362 | SIMULATE);
+    vband_sensor_init(BME280 | MAX30105 | ADXL362);
 #else
     //vband_sensor_init(ADXL362);
     vband_sensor_init(ADXL362 | BME280 | MAX30105 | SIMULATE);
@@ -1315,7 +1319,7 @@ int main(void)
     // Set engineering mode from flash
     if (!read_flash_active_mode(&m_current_vband_mode))
     {
-        m_current_vband_mode = BLE_VBAND_SRV_MODE_NORMAL; // if invalid flash default to normal mode
+        m_current_vband_mode = BLE_VBAND_SRV_MODE_ENGINEERING; // if invalid flash default to normal mode
     }
 
     // Configure and initialize the BLE stack.

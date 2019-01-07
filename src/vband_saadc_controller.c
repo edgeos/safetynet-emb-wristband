@@ -112,7 +112,7 @@ static void saadc_electrode_callback(nrf_drv_saadc_evt_t const * p_event)
             
         // log event
         m_adc_evt_counter++;
-        NRF_LOG_INFO("ADC event number: %ld",m_adc_evt_counter);
+        //NRF_LOG_INFO("ADC event number: %ld",m_adc_evt_counter);
         //saadc_task_finished_fn(&m_electrode_saadc_vals[0][0], &m_electrode_saadc_vals[1][0], &m_electrode_saadc_vals[2][0], NUM_MEASUREMENTS);  
     }
 }

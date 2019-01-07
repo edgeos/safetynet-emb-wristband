@@ -454,7 +454,7 @@ static void get_adxl362_measurement(uint8_t * p_data, uint16_t * p_data_length)
         zdata++;
     }
 
-    //NRF_LOG_INFO("x:  %d  , y:  %d  , z:  %d\r", xdata, ydata, zdata);
+    NRF_LOG_INFO("x:  %d  , y:  %d  , z:  %d\r", xdata, ydata, zdata);
 
     // package for BLE
     memcpy(&data_buffer[0], &xdata, sizeof(xdata));
