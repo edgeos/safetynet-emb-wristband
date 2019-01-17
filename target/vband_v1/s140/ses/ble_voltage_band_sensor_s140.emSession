@@ -81,12 +81,13 @@
  <Files>
   <SessionOpenFile windowGroup="DockEditLeft" x="0" y="3" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../src/ble_vband_srv.c" selected="0" top="0" codecName="Default"/>
   <SessionOpenFile windowGroup="DockEditLeft" x="0" y="39" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../src/ble_vband_srv.h" selected="0" top="3" codecName="Default"/>
-  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="446" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../src/vband_main.c" selected="0" top="423" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="6" y="274" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../src/vband_main.c" selected="1" top="231" codecName="Default"/>
   <SessionOpenFile windowGroup="DockEditLeft" x="0" y="46" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../src/vband_flash_controller.h" selected="0" top="3" codecName="Default"/>
   <SessionOpenFile windowGroup="DockEditLeft" x="0" y="0" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../src/vband_ext_sensor_controller.c" selected="0" top="0" codecName="Default"/>
   <SessionOpenFile windowGroup="DockEditLeft" x="0" y="15" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../src/vband_flash_controller.c" selected="0" top="0" codecName="Default"/>
   <SessionOpenFile windowGroup="DockEditLeft" x="0" y="153" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../src/voltage_alarm_algorithm.c" selected="0" top="120" codecName="Default"/>
-  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="53" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../nordic_sdk/components/toolchain/cmsis/include/arm_const_structs.h" selected="1" top="36" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="53" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../nordic_sdk/components/toolchain/cmsis/include/arm_const_structs.h" selected="0" top="36" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="238" useTextEdit="1" useBinaryEdit="0" left="0" path="../../../../src/vband_saadc_controller.c" selected="0" top="199" codecName="Default"/>
  </Files>
  <ARMCrossStudioWindow activeProject="ble_voltage_band_sensor_s140" fileDialogDefaultFilter="*.h" autoConnectTarget="J-Link" buildConfiguration="Debug" debugSearchFileMap="../../../Include/arm_math.h&#xa;&#xa;../ComplexMathFunctions/arm_cmplx_mag_f32.c&#xa;&#xa;../TransformFunctions/arm_bitreversal2.S&#xa;&#xa;../TransformFunctions/arm_cfft_f32.c&#xa;&#xa;../TransformFunctions/arm_cfft_radix8_f32.c&#xa;" fileDialogInitialDirectory="D:/Contracting/GE/2018_Fall/git_repo/safetynet-emb-wristband/src" debugSearchPath="" autoConnectCapabilities="3199"/>
 </session>
