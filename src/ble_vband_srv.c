@@ -22,20 +22,20 @@ static void on_write(ble_vband_srv_t * p_vband_srv, ble_evt_t const * p_ble_evt)
     ble_vband_srv_evt_t                 evt;
     ble_vband_srv_client_context_t    * p_client;
     ble_gatts_evt_write_t const * p_evt_write = &p_ble_evt->evt.gatts_evt.params.write;
-
+/*
     err_code = blcm_link_ctx_get(p_vband_srv->p_link_ctx_storage,
                                  p_ble_evt->evt.gatts_evt.conn_handle,
                                  (void *) &p_client);
     if (err_code != NRF_SUCCESS)
     {
-        NRF_LOG_ERROR("Link context for 0x%02X connection handle could not be fetched.",
-                      p_ble_evt->evt.gatts_evt.conn_handle);
+        NRF_LOG_ERROR("Link context for 0x%02X connection handle could not be fetched. error %d",
+                      p_ble_evt->evt.gatts_evt.conn_handle, err_code);
     }
-
+*/
     memset(&evt, 0, sizeof(ble_vband_srv_evt_t));
     evt.p_vband_srv = p_vband_srv;
     evt.conn_handle = p_ble_evt->evt.gatts_evt.conn_handle;
-    evt.p_link_ctx  = p_client;
+    //evt.p_link_ctx  = p_client;
 
     if ((p_evt_write->handle == p_vband_srv->alarm_state_handles.cccd_handle) &&
         (p_evt_write->len == 2))
@@ -54,6 +54,7 @@ static void on_write(ble_vband_srv_t * p_vband_srv, ble_evt_t const * p_ble_evt)
     {
         if (ble_srv_is_notification_enabled(p_evt_write->data))
         {
+            //NRF_LOG_INFO("accel notification enabled");
             p_vband_srv->is_notification_supported_accel_d = true;
         }
         else

@@ -83,10 +83,12 @@ static uint32_t nrf5_flash_end_addr_get()
 
 static void print_flash_info(nrf_fstorage_t * p_fstorage)
 {
+#if NRF_LOG_ENABLED
     NRF_LOG_INFO("========| flash info |========");
     NRF_LOG_INFO("erase unit: \t%d bytes",      p_fstorage->p_flash_info->erase_unit);
     NRF_LOG_INFO("program unit: \t%d bytes",    p_fstorage->p_flash_info->program_unit);
     NRF_LOG_INFO("==============================");
+#endif
 }
 
 void initialize_flash(void)
@@ -121,8 +123,12 @@ void initialize_flash(void)
 
 bool read_flash_ble_advertisement_name(uint8_t * buf)
 {
-    memcpy(buf, &m_ble_name.name, MAX_BLE_NAME_LENGTH);
-    return (m_ble_name.magic_number == FLASHWRITE_BLOCK_VALID) ? true : false;
+    if(m_ble_name.magic_number == FLASHWRITE_BLOCK_VALID)
+    {
+      memcpy(buf, &m_ble_name.name, MAX_BLE_NAME_LENGTH);
+      return true;
+    }
+    else return false;
 }
 
 bool read_flash_alarm_threshold(uint32_t * buf)
@@ -133,8 +139,12 @@ bool read_flash_alarm_threshold(uint32_t * buf)
 
 bool read_flash_active_mode(uint8_t * buf)
 {
-    *buf = m_active_mode.mode;
-    return (m_active_mode.magic_number == FLASHWRITE_BLOCK_VALID) ? true : false;
+    if(m_active_mode.magic_number == FLASHWRITE_BLOCK_VALID)
+    {
+      *buf = m_active_mode.mode;
+      return true;
+    }
+    else return false;
 }
 
 void write_flash_all_params(void)

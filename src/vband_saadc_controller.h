@@ -43,8 +43,8 @@
 
 #include <stdint.h>
 #include "nrf.h"
-#include "nrf_drv_saadc.h"
-#include "nrf_drv_rtc.h"
+//#include "nrf_drv_saadc.h"
+//#include "nrf_drv_rtc.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -69,7 +69,11 @@ void saadc_assign_callback_fn(saadc_finished_fnptr_t fn);
  */
 void vband_saadc_sample_electrode_channels(void);
 
-void vband_saadc_sample_battery_voltage(float *battery_voltage);
+void vband_saadc_read_battery_voltage(float *battery_voltage);
+
+void vband_saadc_read_usb_voltage(float *usb_voltage);
+
+void vband_saadc_disable_rtc(void);
 
 #ifdef __cplusplus
 }

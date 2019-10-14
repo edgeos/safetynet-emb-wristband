@@ -42,8 +42,10 @@
 
 #if defined(BOARD_VBAND_V1)
   #include "vband_v1.h"
+#elif defined(BOARD_VWEDGE_V1)
+  #include "vwedge_v1.h"
 #else
-#error "Board is not defined"
+  #error "Board is not defined"
 #endif
 
 #endif //CUSTOM_BOARD_H

@@ -55,6 +55,8 @@ unsigned char SPI_Init(unsigned char lsbFirst,
                        unsigned char clockPol,
                        unsigned char clockEdg);
 
+void SPI_uninit(void);
+
 /*! Reads data from SPI. */
 unsigned char SPI_Read(unsigned char slaveDeviceId,
                        unsigned char* data,

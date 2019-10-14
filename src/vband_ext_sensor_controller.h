@@ -54,6 +54,8 @@ typedef enum
     BME280   = 1 << 1,
     CCS811   = 1 << 2,
     MAX30105 = 1 << 3,
+    VSENSOR  = 1 << 4,
+    POZYX    = 1 << 5,
     SIMULATE = 1 << 7,
 } sensor_type_t;
 
@@ -64,23 +66,35 @@ typedef enum
     PRESENCE_DETECTED = 1,
 } max30105_state_t;
 
+/**@brief return value defines */
+typedef enum
+{
+    WEDGE_SENSOR_SUCCESS = 0,
+    WEDGE_SENSOR_NOT_ENABLED = 1
+} sensor_return_t;
+
 
 /**@brief Initialize External Sensor Interfaces
- *
+ * returns bitfield indicating which sensors are enabled
  */
-void vband_sensor_init(sensor_type_t use_sensors);
+uint16_t vband_sensor_init(sensor_type_t use_sensors);
 
 /**@brief Get External Sensor Data
  *
  */
-int8_t get_sensor_data(sensor_type_t get_sensor, uint8_t * p_data, uint16_t * p_data_length);
+sensor_return_t get_sensor_data(sensor_type_t get_sensor, uint8_t * p_data, uint16_t * p_data_length);
 
+static void twi_init(void);
+static void twi_uninit(void);
 
 uint32_t adxl362_configure_wakeup();
+uint32_t adxl362_wait_for_sleep();
 
 void vband_sensor_shutdown(sensor_type_t use_sensors);
 
 void vband_sensor_wakeup(sensor_type_t use_sensors);
+
+void vband_sensor_sleep(sensor_type_t use_sensors);
 
 #ifdef __cplusplus
 }

@@ -32,8 +32,8 @@
 static uint8_t m_sample[20];
 
 #ifndef CCS811_RESET_PIN
-#define CCS811_RESET_PIN          NRF_GPIO_PIN_MAP(0,18)     // Enable signal pin
-#define CCS811_WAKEUP_PIN         NRF_GPIO_PIN_MAP(1,8)      // Wakeup signal pin
+#define CCS811_RESET_PIN          NRF_GPIO_PIN_MAP(1,3)      // Enable signal pin
+#define CCS811_WAKEUP_PIN         NRF_GPIO_PIN_MAP(1,2)      // Wakeup signal pin
 #endif
 
 /**@brief I2C enable on - WAKEUP pin control */
@@ -60,6 +60,7 @@ void ccs811_chip_reset(void)
 /**@brief I2C enable on - WAKEUP pin control */
 void ccs811_twi_enable(void)
 {
+    //nrf_gpio_pin_clear(CCS811_WAKEUP_PIN);
     nrf_drv_gpiote_out_clear(CCS811_WAKEUP_PIN);
     nrf_delay_us(500);
 }
@@ -67,6 +68,7 @@ void ccs811_twi_enable(void)
 /**@brief I2C enable off - WAKEUP pin control*/
 void ccs811_twi_disable(void)
 {
+    //nrf_gpio_pin_set(CCS811_WAKEUP_PIN);
     nrf_drv_gpiote_out_set(CCS811_WAKEUP_PIN); // set = high = off
 }
 
@@ -78,7 +80,7 @@ void ccs811_twi_disable(void)
 bool ccs811_init(struct ccs811_dev *dev)
 {
     // turn the chip on and config pins
-    ccs811_chip_reset();
+    ccs811_chip_reset(); // reset pin not used in this board
 
     // enable i2c comms
     ccs811_twi_enable();

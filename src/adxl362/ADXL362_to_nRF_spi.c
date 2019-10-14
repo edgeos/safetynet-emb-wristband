@@ -46,49 +46,36 @@
 #include <stdbool.h>
 #include "boards.h"
 #include "nrf_drv_spi.h"
-#include "nrf_drv_gpiote.h"
-#include "app_util_platform.h"
-#include "nrf_gpio.h"
-#include "nrf_delay.h"
+//#include "nrf_drv_gpiote.h"
+//#include "app_util_platform.h"
+//#include "nrf_gpio.h"
+//#include "nrf_delay.h"
 #include "app_error.h"
-#include <string.h>
+//#include <string.h>
 #include "nrf_log.h"
 #include "nrf_log_ctrl.h"
 #include "nrf_log_default_backends.h"
 #include "ADXL362_to_nRF_spi.h"
 
-#ifndef SPI_INSTANCE_ADXL362
-#define SPI_INSTANCE_ADXL362  1 /**< SPI instance index. */
-#define SPI_SCK_PIN_ADXL362   NRF_GPIO_PIN_MAP(1, 4)
-#define SPI_MISO_PIN_ADXL362  NRF_GPIO_PIN_MAP(1, 2)
-#define SPI_MOSI_PIN_ADXL362  NRF_GPIO_PIN_MAP(1, 3)
-#define SPI_SS_PIN_ADXL362    NRF_GPIO_PIN_MAP(1, 1)
-#define ADXL362_POWER_ON      NRF_GPIO_PIN_MAP(0, 16)
-#define ADXL362_INT1          NRF_GPIO_PIN_MAP(1, 5)
-#define ADXL362_INT2          NRF_GPIO_PIN_MAP(1, 6)
-#endif
+#define SPI_BUFFER_SIZE 32
 
-static const nrf_drv_spi_t p_spi_master_0 = NRF_DRV_SPI_INSTANCE(SPI_INSTANCE_ADXL362);
+static const nrfx_spim_t p_spim = NRFX_SPIM_INSTANCE(SPI_INSTANCE_ADXL362);
 static volatile bool spi_xfer_done;  /**< Flag used to indicate that SPI instance completed the transfer. */
+static volatile bool spi_initialized;  /**< Flag used to indicate that SPI instance has been initialized. */
+static unsigned char tx_buffer[SPI_BUFFER_SIZE] = {0};
+static unsigned char rx_buffer[SPI_BUFFER_SIZE] = {0};
 
 /**
  * @brief SPI user event handler.
  * @param event
  */
-static void spi_event_handler(nrf_drv_spi_evt_t const * p_event, void * p_context)
+static void spi_event_handler(nrfx_spim_evt_t const * p_event, void * p_context)
 {
+  if(p_event->type == NRFX_SPIM_EVENT_DONE)
+  {
     spi_xfer_done = true;
-}
-
-/**@brief chip enable on */
-static void chip_enable(void)
-{
-    if(!nrf_drv_gpiote_is_init())
-    {
-        APP_ERROR_CHECK(nrf_drv_gpiote_init());
-    }
-    nrf_drv_gpiote_out_config_t out_config = GPIOTE_CONFIG_OUT_SIMPLE(true);
-    APP_ERROR_CHECK(nrf_drv_gpiote_out_init(ADXL362_POWER_ON, &out_config));
+  }
+  //else NRF_LOG_INFO("some other events from spi");
 }
 
 /***************************************************************************//**
@@ -119,19 +106,51 @@ unsigned char SPI_Init(unsigned char lsbFirst,
                        unsigned char clockPol,
                        unsigned char clockEdg)
 {
-    // set wakeup pin to logic high
-    chip_enable();
-
+  if(!spi_initialized)
+  {
     // initialize spi driver 
-    nrf_drv_spi_config_t spi_config = NRF_DRV_SPI_DEFAULT_CONFIG;
-    spi_config.ss_pin    = SPI_SS_PIN_ADXL362;
-    spi_config.miso_pin  = SPI_MISO_PIN_ADXL362;
-    spi_config.mosi_pin  = SPI_MOSI_PIN_ADXL362;
-    spi_config.sck_pin   = SPI_SCK_PIN_ADXL362;
-    spi_config.frequency = NRF_DRV_SPI_FREQ_1M;//NRF_DRV_SPI_FREQ_1M; //NRF_DRV_SPI_FREQ_4M; 
-    APP_ERROR_CHECK(nrf_drv_spi_init(&p_spi_master_0, &spi_config, spi_event_handler, NULL));
+    nrfx_spim_config_t config = NRFX_SPIM_DEFAULT_CONFIG;
+    config.sck_pin        = SPI_SCK_PIN_ADXL362;
+    config.mosi_pin       = SPI_MOSI_PIN_ADXL362;
+    config.miso_pin       = SPI_MISO_PIN_ADXL362;
+    config.ss_pin         = SPI_SS_PIN_ADXL362;
+//    config.ss_active_high = false,                  // use default
+//    config.irq_priority   = p_config->irq_priority; // use default
+//    config.orc            = p_config->orc; // use default
+    config.frequency      = NRF_SPIM_FREQ_1M;
+//    config.mode           = (nrf_spim_mode_t)p_config->mode; // use default
+//    config.bit_order      = (nrf_spim_bit_order_t)p_config->bit_order; // use default
 
-    return 1;
+    APP_ERROR_CHECK(nrfx_spim_init(&p_spim, &config, spi_event_handler, NULL));
+    spi_initialized = true;
+  }
+  return 1;
+}
+
+void SPI_uninit(void)
+{
+  ret_code_t err_code = 0;
+  
+  //NRF_LOG_INFO("entered SPI_uninit, before while loop");
+  // hard fault after the above line? at 0xFFFFFF00 or 0xFFFF00F8
+
+  // wait until transfers are done
+  while(!spi_xfer_done)
+  {
+//      err_code++;
+//    err_code = sd_app_evt_wait();
+//    APP_ERROR_CHECK(err_code);
+  }
+//  NRF_LOG_INFO("going to call nrfx_spim_uninit, waited %d times",err_code);
+//  NRF_LOG_FLUSH();
+  nrfx_spim_uninit(&p_spim);
+  spi_initialized = false;
+/*
+  // workaround for errata 89 static current consumption 400uA
+  *(volatile uint32_t *)0x40004FFC = 0;
+  *(volatile uint32_t *)0x40004FFC;
+  *(volatile uint32_t *)0x40004FFC = 1;
+  */
 }
 
 /***************************************************************************//**
@@ -148,11 +167,28 @@ unsigned char SPI_Read(unsigned char slaveDeviceId,
                        unsigned char* data,
                        unsigned char bytesNumber)
 {
-    unsigned char read_buffer[32];
-    spi_xfer_done = false;
-    APP_ERROR_CHECK(nrf_drv_spi_transfer(&p_spi_master_0, data, bytesNumber, read_buffer, bytesNumber));
-    while (!spi_xfer_done) __WFE();
-    memcpy(data, &read_buffer[0], bytesNumber);
+    ret_code_t err_code;
+
+    if(bytesNumber <= SPI_BUFFER_SIZE)
+    {
+      spi_xfer_done = false;
+      do
+      {
+        nrfx_spim_xfer_desc_t xfer = NRFX_SPIM_SINGLE_XFER(data, bytesNumber, rx_buffer, bytesNumber);
+        err_code = nrfx_spim_xfer(&p_spim, &xfer, 0);
+      } while(err_code == NRF_ERROR_BUSY);
+      do
+      {
+        APP_ERROR_CHECK(err_code);
+  //      err_code = sd_app_evt_wait(); // causes hardfault
+      } while(!spi_xfer_done);
+      memcpy(data, &rx_buffer[0], bytesNumber);
+    }
+    else
+    {
+      // something is not right
+      ASSERT(false);
+    }
 }
 
 /***************************************************************************//**
@@ -168,8 +204,21 @@ unsigned char SPI_Write(unsigned char slaveDeviceId,
                         unsigned char* data,
                         unsigned char bytesNumber)
 {
-    unsigned char dummy_buffer[32];
+    ret_code_t err_code;
     spi_xfer_done = false;
-    APP_ERROR_CHECK(nrf_drv_spi_transfer(&p_spi_master_0, data, bytesNumber, dummy_buffer, bytesNumber));
-    while (!spi_xfer_done) __WFE();
+    if(bytesNumber <= SPI_BUFFER_SIZE)
+    {
+      memcpy(&tx_buffer[0], data, bytesNumber);
+    }
+    else
+    {
+      // something is not right
+      ASSERT(false);
+    }
+    do
+    {
+      nrfx_spim_xfer_desc_t xfer = NRFX_SPIM_SINGLE_XFER(tx_buffer, bytesNumber, rx_buffer, bytesNumber);
+      err_code = nrfx_spim_xfer(&p_spim, &xfer, 0);
+    } while(err_code == NRFX_ERROR_BUSY);
+    APP_ERROR_CHECK(err_code);
 }

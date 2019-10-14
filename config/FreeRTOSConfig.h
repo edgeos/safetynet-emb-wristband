@@ -62,9 +62,9 @@
 #define configCPU_CLOCK_HZ                                                        ( SystemCoreClock )
 #define configTICK_RATE_HZ                                                        1024
 #define configMAX_PRIORITIES                                                      ( 5 ) // default 3
-#define configMINIMAL_STACK_SIZE                                                  ( 60 )
-#define configTOTAL_HEAP_SIZE                                                     ( 16384 ) //( 4096 )
-#define configMAX_TASK_NAME_LEN                                                   ( 4 )
+#define configMINIMAL_STACK_SIZE                                                  ( 256 )
+#define configTOTAL_HEAP_SIZE                                                     ( 16384 + 4096 ) //( 4096 )
+#define configMAX_TASK_NAME_LEN                                                   16
 #define configUSE_16_BIT_TICKS                                                    0
 #define configIDLE_SHOULD_YIELD                                                   1
 #define configUSE_MUTEXES                                                         1
@@ -78,9 +78,9 @@
 #define configENABLE_BACKWARD_COMPATIBILITY                                       1
 
 /* Hook function related definitions. */
-#define configUSE_IDLE_HOOK 1
+#define configUSE_IDLE_HOOK                                                       1
 #define configUSE_TICK_HOOK                                                       0
-#define configCHECK_FOR_STACK_OVERFLOW                                            0
+#define configCHECK_FOR_STACK_OVERFLOW                                            1
 #define configUSE_MALLOC_FAILED_HOOK                                              0
 
 /* Run time and task stats gathering related definitions. */
@@ -96,7 +96,7 @@
 #define configUSE_TIMERS 1
 #define configTIMER_TASK_PRIORITY                                                 ( 2 ) // default 2
 #define configTIMER_QUEUE_LENGTH                                                  32
-#define configTIMER_TASK_STACK_DEPTH                                              ( 80 )
+#define configTIMER_TASK_STACK_DEPTH                                              ( 256 )
 
 /* Tickless Idle configuration. */
 #define configEXPECTED_IDLE_TIME_BEFORE_SLEEP                                     2
@@ -116,7 +116,7 @@
 #define INCLUDE_vTaskPrioritySet                                                  1
 #define INCLUDE_uxTaskPriorityGet                                                 1
 #define INCLUDE_vTaskDelete                                                       1
-#define INCLUDE_vTaskSuspend 1
+#define INCLUDE_vTaskSuspend                                                      1
 #define INCLUDE_xResumeFromISR                                                    1
 #define INCLUDE_vTaskDelayUntil                                                   1
 #define INCLUDE_vTaskDelay                                                        1

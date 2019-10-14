@@ -43,12 +43,41 @@
 /******************************************************************************/
 /***************************** Include Files **********************************/
 /******************************************************************************/
+#include <stdbool.h>
+#include "boards.h"
+#include "nrf_drv_gpiote.h"
+#include "app_util_platform.h"
+#include "nrf_gpio.h"
+#include "nrf_delay.h"
+#include "app_error.h"
 #include "ADXL362.h"
 #include "ADXL362_to_nRF_spi.h"
 
 /******************************************************************************/
 /************************ Functions Definitions *******************************/
 /******************************************************************************/
+
+/**@brief chip enable on */
+static void ADXL362_power(bool power_on)
+{
+    nrf_gpio_cfg_output(ADXL362_POWER_ON);
+    if(power_on)
+    {
+      nrf_gpio_pin_set(ADXL362_POWER_ON);
+    }
+    else
+    {
+      nrf_gpio_pin_clear(ADXL362_POWER_ON);
+    }
+/*
+    if(!nrf_drv_gpiote_is_init())
+    {
+        APP_ERROR_CHECK(nrf_drv_gpiote_init());
+    }
+    nrf_drv_gpiote_out_config_t out_config = GPIOTE_CONFIG_OUT_SIMPLE(power_on);
+    APP_ERROR_CHECK(nrf_drv_gpiote_out_init(ADXL362_POWER_ON, &out_config));
+    */
+}
 
 /***************************************************************************//**
  * @brief Initializes communication with the device and checks if the part is
@@ -61,14 +90,38 @@ unsigned char ADXL362_Init(void)
 {
     unsigned char regValue = 0;
     unsigned char status   = 0;
+    unsigned char retrys   = 2; // number of times to try communicating with ADXL362
 
-    status = SPI_Init(0, 4000000, 0, 1);
-    ADXL362_GetRegisterValue(&regValue, ADXL362_REG_PARTID, 1);
-    if(regValue != ADXL362_PART_ID)
+    // set ADXL power pin to logic Low
+    ADXL362_power(false);
+    // wait 5ms
+    nrf_delay_ms(5);
+    // set ADXL power pin to logic high
+    ADXL362_power(true);
+    // wait 5ms
+    nrf_delay_ms(5);
+
+    status = SPI_Init(ADXL362_LSB_FIRST, ADXL362_SPI_CLOCK, ADXL362_CLK_POL, ADXL362_CLK_EDGE);
+    do
     {
-        ADXL362_GetRegisterValue(&regValue, ADXL362_REG_PARTID, 1);
-        status = 0;
-    }
+      ADXL362_GetRegisterValue(&regValue, ADXL362_REG_DEVID_AD, 1);
+      if(regValue == ADXL362_DEVICE_AD)
+      {
+        ADXL362_GetRegisterValue(&regValue, ADXL362_REG_DEVID_MST, 1);
+        if(regValue == ADXL362_DEVICE_MST)
+        {
+          ADXL362_GetRegisterValue(&regValue, ADXL362_REG_PARTID, 1);
+          if(regValue == ADXL362_PART_ID)
+          {
+            // device checks out
+            status = 1;
+            break;
+          }
+        }
+      }
+      // if get here, that means ADXL362 did not respond with correct device ID
+      status = 0;
+    } while (retrys--);
 
     return status;
 }

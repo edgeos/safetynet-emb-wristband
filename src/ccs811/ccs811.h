@@ -5,7 +5,8 @@
 #ifndef CCS811_H
 #define CCS811_H
 
-#define CCS811_ADDR                  0x5B
+#define CCS811_ADDR                  0x5A // if ADDR is gnd
+//#define CCS811_ADDR                  0x5B // if ADDR is VDD
 #define CCS811_REG_STATUS            0x00
 #define CCS811_REG_MEAS_MODE         0x01
 #define CCS811_REG_ALG_RESULTS_DATA  0x02

@@ -50,4 +50,11 @@
     <ProgramSection alignment="8" size="__STACKSIZE__" load="No" place_from_segment_end="Yes" name=".stack"  address_symbol="__StackLimit" end_symbol="__StackTop"/>
     <ProgramSection alignment="8" size="__STACKSIZE_PROCESS__" load="No" name=".stack_process" />
   </MemorySegment>
+  <MemorySegment name="UICR_PSELRESET" start="0x10001200" size="8">
+    <ProgramSection alignment="4" keep="Yes" load="Yes" name=".pselreset0" />
+    <ProgramSection alignment="4" keep="Yes" load="Yes" name=".pselreset1" />
+  </MemorySegment>
+  <MemorySegment name="UICR" start="0x10001304" size="4">
+    <ProgramSection alignment="4" keep="Yes" load="Yes" name=".regout0" />
+  </MemorySegment>
 </Root>

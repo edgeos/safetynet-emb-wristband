@@ -211,14 +211,16 @@ int MAX30105_init(struct max30105_dev *devPtr)
         return MAX30105_ERROR;
     if(MAX30105_writeReg(REG_MODE_CONFIG,0x03) != MAX30105_NO_ERROR)   //0x02 for Red only, 0x03 for SpO2 mode 0x07 multimode LED
         return MAX30105_ERROR;
-    if(MAX30105_writeReg(REG_SPO2_CONFIG,0x27) != MAX30105_NO_ERROR)  // SPO2_ADC range = 4096nA, SPO2 sample rate (100 Hz), LED pulseWidth (400uS)
+    if(MAX30105_writeReg(REG_SPO2_CONFIG,0x20) != MAX30105_NO_ERROR)  // SPO2_ADC range = 4096nA, SPO2 sample rate (50 Hz), LED pulseWidth (50uS)
         return MAX30105_ERROR;
-    if(MAX30105_writeReg(REG_LED1_PA,0x24) != MAX30105_NO_ERROR)   //Choose value for ~ 7mA for LED1
-        return MAX30105_ERROR;
-    if(MAX30105_writeReg(REG_LED2_PA,0x24) != MAX30105_NO_ERROR)   // Choose value for ~ 7mA for LED2
-        return MAX30105_ERROR;
-    if(MAX30105_writeReg(REG_PILOT_PA,0x7f) != MAX30105_NO_ERROR)   // Choose value for ~ 25mA for Pilot LED
-        return MAX30105_ERROR;
+//    if(MAX30105_writeReg(REG_LED1_PA,0x24) != MAX30105_NO_ERROR)   //Choose value for ~ 7mA for LED1
+//        return MAX30105_ERROR;
+//    if(MAX30105_writeReg(REG_LED2_PA,0x24) != MAX30105_NO_ERROR)   // Choose value for ~ 7mA for LED2
+//        return MAX30105_ERROR;
+    //if(MAX30105_writeReg(REG_LED3_PA,0x24) != MAX30105_NO_ERROR)   // Choose value for ~ 7mA for LED3 not using Green LED
+        //return MAX30105_ERROR;
+//    if(MAX30105_writeReg(REG_PILOT_PA,0x7f) != MAX30105_NO_ERROR)   // Choose value for ~ 25mA for Pilot LED proximity LED current set later
+        //return MAX30105_ERROR;
     return MAX30105_NO_ERROR;
 }
 
@@ -338,7 +340,7 @@ int MAX30105_shutDown()
 {
     _modeConfiguration |= MASK_SHDN;
     if(MAX30105_writeReg(REG_MODE_CONFIG, _modeConfiguration) != MAX30105_NO_ERROR) return MAX30105_ERROR;
-    return MAX30105_NO_ERROR;        
+    return MAX30105_NO_ERROR;
 }
 
 //******************************************************************************

@@ -25,7 +25,8 @@ typedef enum
 {
     BLE_NAME        = 1,
     ALARM_THRESHOLD = 2,
-    DEFAULT_MODE    = 3
+    DEFAULT_MODE    = 3,
+    HEART_BEAT      = 4
 } config_param_type_t;
 
 typedef struct

@@ -93,6 +93,7 @@
 #include "vband_ext_sensor_controller.h"
 #include "voltage_alarm_algorithm.h"
 #include "vband_flash_controller.h"
+#include "vband_common.h"
 
 // external sensors
 #include "ccs811.h"
@@ -107,14 +108,15 @@
 // MEASURE_INTERVALs should be a multiple of the SAMPLE_INTERVAL
 #define EXT_SENSORS_WAKEUP_SAMPLE_INTERVAL          100                                      /**< Ext. Sensor measurement interval (ms). */
 #define EXT_SENSORS_WAKEUP_SAMPLE_INTERVAL_TICKS    APP_TIMER_TICKS(100)
-#define CCS811_MEASURE_INTERVAL                     1000                                    /**< CCS811 measurement interval (ms). */
-#define BME280_MEASURE_INTERVAL                     1000                                    /**< BME280 measurement interval (ms). */
-#define MAX30105_MEASURE_PROXIMITY_INTERVAL         250                                     /**< MAX30105 proximity measurement interval (ms). */
+#define HEART_BEAT_CHECK_INTERVAL                   5000                                    /**< interval (ms) between checking on BLE connection heart beat. */
+#define CCS811_MEASURE_INTERVAL                     60000                                    /**< CCS811 measurement interval (ms). */
+#define BME280_MEASURE_INTERVAL                     2000                                    /**< BME280 measurement interval (ms). */
+#define MAX30105_MEASURE_PROXIMITY_INTERVAL         1000                                     /**< MAX30105 proximity measurement interval (ms). */
 #define MAX30105_MEASURE_HEART_RATE_INTERVAL        15                                      /**< MAX30105 proximity measurement interval (ms). */
 #define ADXL362_MEASURE_INTERVAL                    75                                      /**< ADXL362 measurement interval (ms). */
 #define ADXL362_INACTIVITY_WHILE_CONNECTED_TIMEOUT  600                                     /**< ADXL362 sleep interval while connected (seconds). */
 
-#define DEVICE_NAME                         "GE GRC Wrist 2"                      /**< Name of device. Will be included in the advertising data. */
+#define DEVICE_NAME                         "GE GRC Wrist 2"                        /**< Name of device. Will be included in the advertising data. */
 #define MANUFACTURER_NAME                   "GE"                                    /**< Manufacturer. Will be passed to Device Information Service. */
 #define VBAND_SERVICE_UUID_TYPE             BLE_UUID_TYPE_VENDOR_BEGIN              /**< UUID type for the Voltage Band Service (vendor specific). */
 
@@ -123,9 +125,11 @@
 
 #define APP_ADV_INTERVAL                    160                                     /**< The advertising interval (in units of 0.625 ms. This value corresponds to 1000 ms). */
 #ifdef BOARD_VBAND_V1
-#define APP_ADV_DURATION                    3000 //180000                                    /**< The advertising duration (60 seconds) in units of 10 milliseconds. */
+  #define APP_ADV_DURATION                  3000 //180000                           /**< The advertising duration (30 seconds) in units of 10 milliseconds. */
+#elif defined(VWEDGE_V1_H)
+  #define APP_ADV_DURATION                  10000                                    /**< The advertising duration (30 seconds) in units of 10 milliseconds. */
 #else
-#define APP_ADV_DURATION                    3000                                    /**< The advertising duration (60 seconds) in units of 10 milliseconds. */
+  #define APP_ADV_DURATION                  3000                                    /**< The advertising duration (30 seconds) in units of 10 milliseconds. */
 #endif
 
 #define BATTERY_LEVEL_MEAS_INTERVAL         2000                                    /**< Battery level measurement interval (ms). */
@@ -133,8 +137,10 @@
 #define MAX_BATTERY_LEVEL                   100                                     /**< Maximum simulated battery level. */
 #define BATTERY_LEVEL_INCREMENT             1                                       /**< Increment between each simulated battery level measurement. */
 
-#define MIN_CONN_INTERVAL                   MSEC_TO_UNITS(70, UNIT_1_25_MS)        /**< Minimum acceptable connection interval (0.4 seconds). */
-#define MAX_CONN_INTERVAL                   MSEC_TO_UNITS(140, UNIT_1_25_MS)        /**< Maximum acceptable connection interval (0.65 second). */
+//#define MIN_CONN_INTERVAL                   MSEC_TO_UNITS(70, UNIT_1_25_MS)        /**< Minimum acceptable connection interval (0.4 seconds). */
+//#define MAX_CONN_INTERVAL                   MSEC_TO_UNITS(140, UNIT_1_25_MS)        /**< Maximum acceptable connection interval (0.65 second). */
+#define MIN_CONN_INTERVAL                   MSEC_TO_UNITS(8, UNIT_1_25_MS)        /**< Minimum acceptable connection interval (0.008 seconds). */
+#define MAX_CONN_INTERVAL                   MSEC_TO_UNITS(20, UNIT_1_25_MS)        /**< Maximum acceptable connection interval (0.020 second).  We're sending a lot of updates*/
 #define SLAVE_LATENCY                       0                                       /**< Slave latency. */
 #define CONN_SUP_TIMEOUT                    MSEC_TO_UNITS(4000, UNIT_10_MS)         /**< Connection supervisory time-out (4 seconds). */
 
@@ -161,6 +167,14 @@ NRF_BLE_GATT_DEF(m_gatt);                                           /**< GATT mo
 NRF_BLE_QWR_DEF(m_qwr);                                             /**< Context for the Queued Write module.*/
 BLE_ADVERTISING_DEF(m_advertising);                                 /**< Advertising module instance. */
 
+// set VDD voltage REGOUT0 in UICR
+const uint32_t UICR_ADDR_REGOUT0 __attribute__((section(".regout0"))) __attribute__((used))  = 0xFFFFFFF3; // 2.7V
+//const uint32_t UICR_ADDR_REGOUT0 __attribute__((section(".regout0"))) __attribute__((used))  = 0xFFFFFFF4; // 3.0V
+//const uint32_t UICR_ADDR_REGOUT0 __attribute__((section(".regout0"))) __attribute__((used))  = 0xFFFFFFF5; // 3.3V
+ // use P0.18 as reset
+const uint32_t UICR_ADDR_PSELRESET0 __attribute__((section(".pselreset0"))) __attribute__((used))  = 0x00000012;
+const uint32_t UICR_ADDR_PSELRESET1 __attribute__((section(".pselreset1"))) __attribute__((used))  = 0x00000012;
+
 static uint16_t m_conn_handle              = BLE_CONN_HANDLE_INVALID;                 /**< Handle of the current connection. */
 static uint16_t m_ble_vband_max_data_len   = BLE_GATT_ATT_MTU_DEFAULT - 3;            /**< Maximum length of data (in bytes) that can be transmitted to the peer by the Nordic UART service module. */
 
@@ -168,10 +182,12 @@ static sensorsim_cfg_t   m_battery_sim_cfg;                         /**< Battery
 static sensorsim_state_t m_battery_sim_state;                       /**< Battery Level sensor simulator state. */
 
 static bool m_ble_connected_bool = false;
+static bool m_usb_detected = true;
 
-static char m_ble_advertising_name[MAX_BLE_NAME_LENGTH] = {0};
+static char m_ble_advertising_name[MAX_BLE_NAME_LENGTH] = {0}; // defined in vband_flash_controller.h
 static ble_vband_srv_config_mode_t m_current_vband_mode = BLE_VBAND_SRV_MODE_ENGINEERING;//BLE_VBAND_SRV_MODE_NORMAL;
-
+static uint32_t m_ble_heart_beat = 1; // 32 bit number for keep alive heart beat from tablet app
+static uint32_t m_ble_heart_beat_last = 2; // last heart beat value
 
 static ble_uuid_t m_adv_uuids[] =                                   /**< Universally unique service identifiers. */
 {
@@ -190,6 +206,7 @@ static TaskHandle_t adxl362_measure_task_handle;
 static TaskHandle_t ccs811_measure_task_handle; 
 static TaskHandle_t bme280_measure_task_handle; 
 static TaskHandle_t max30105_measure_task_handle; 
+static TaskHandle_t m_heart_beat_thread;
 xSemaphoreHandle i2c_semaphore = 0;
 
 #if NRF_LOG_ENABLED
@@ -251,9 +268,10 @@ static void battery_level_update(void)
     ret_code_t err_code;
     static uint8_t battery_level;
     float battery_voltage;
+    float usb_voltage;
 
 #ifdef BOARD_VBAND_V1
-    vband_saadc_sample_battery_voltage(&battery_voltage);
+    vband_saadc_read_battery_voltage(&battery_voltage);
     if (battery_voltage >= 2.65f)
     {
         battery_level = 100-(2.7f-battery_voltage)/30;
@@ -270,6 +288,47 @@ static void battery_level_update(void)
     {
         battery_level = 10-(2.55f-battery_voltage)/10;
     }
+#elif defined(BOARD_VWEDGE_V1)
+    vband_saadc_read_battery_voltage(&battery_voltage);
+#if NRF_LOG_ENABLED
+    //NRF_LOG_INFO("battery_voltage " NRF_LOG_FLOAT_MARKER, NRF_LOG_FLOAT(battery_voltage));
+    //NRF_LOG_INFO("battery_level_update %0.2f", battery_voltage);
+#endif
+    if (battery_voltage >= 0.83f)
+    {
+        battery_level = 100;
+    }
+    else if (battery_voltage >= 0.54f)
+    {
+        battery_level = 100-(0.83f-battery_voltage)*310;
+    }
+    else
+    {
+        battery_level = 10-(0.54f-battery_voltage)*230;
+    }
+    //NRF_LOG_INFO("battery_level=%d", battery_level);
+
+    vband_saadc_read_usb_voltage(&usb_voltage);
+    if(m_usb_detected)
+    {
+      if (usb_voltage < 1.1f)
+      {
+        m_usb_detected = false;
+        NRF_LOG_INFO("Charging stopped: " NRF_LOG_FLOAT_MARKER, NRF_LOG_FLOAT(usb_voltage));
+        if(m_ble_connected_bool) update_vband_config_characteristic();
+      }
+    }
+    else
+    {
+      //NRF_LOG_INFO("usb_voltage " NRF_LOG_FLOAT_MARKER, NRF_LOG_FLOAT(usb_voltage));
+      if (usb_voltage >= 1.1f)
+      {
+        m_usb_detected = true;
+        NRF_LOG_INFO("Charging started: " NRF_LOG_FLOAT_MARKER, NRF_LOG_FLOAT(usb_voltage));
+        if(m_ble_connected_bool) update_vband_config_characteristic();
+      }
+    }
+
 #else
     battery_level = (uint8_t)sensorsim_measure(&m_battery_sim_state, &m_battery_sim_cfg);
 #endif
@@ -286,11 +345,13 @@ static void battery_level_update(void)
     }
 }
 
+
 /**@brief Function for sending Voltage Band data over BLE
  */
 static void vband_characteristic_update(ble_vband_char_update_t char_update, uint8_t * p_data, uint16_t * p_length)
 {
     ret_code_t err_code;
+	static uint32_t nFail = 0;
 
     if (m_current_vband_mode == BLE_VBAND_SRV_MODE_NORMAL)
     {
@@ -304,16 +365,29 @@ static void vband_characteristic_update(ble_vband_char_update_t char_update, uin
         }
     }
 
-    err_code = char_update(&m_vband, p_data, p_length, m_conn_handle); 
-    if ((err_code != NRF_SUCCESS) &&
-        (err_code != NRF_ERROR_INVALID_STATE) &&
-        (err_code != NRF_ERROR_RESOURCES) &&
-        (err_code != NRF_ERROR_BUSY) &&
-        (err_code != BLE_ERROR_GATTS_SYS_ATTR_MISSING)
-       )
+    if(m_conn_handle != BLE_CONN_HANDLE_INVALID)
     {
-        APP_ERROR_HANDLER(err_code);
-    }
+		err_code = char_update(&m_vband, p_data, p_length, m_conn_handle);
+
+		if(err_code != NRF_SUCCESS) {
+		  NRF_LOG_INFO("char update failed %d", err_code);
+		  if ((err_code != NRF_SUCCESS) &&
+			  (err_code != NRF_ERROR_INVALID_STATE) &&
+			  (err_code != NRF_ERROR_RESOURCES) &&
+			  (err_code != NRF_ERROR_BUSY) &&
+			  (err_code != BLE_ERROR_GATTS_SYS_ATTR_MISSING)
+			)
+		  {
+			  APP_ERROR_HANDLER(err_code);
+		  } else if(err_code == NRF_ERROR_RESOURCES) {
+			if(++nFail > 100) {
+				// forcibly disconnect
+				nFail = 0;
+				sd_ble_gap_disconnect(m_conn_handle, BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
+			}
+		  }
+		} else { nFail = 0; } //NRF_LOG_INFO("update char %p %u", p_data, *p_length); }
+    } 
 }
 
 
@@ -379,6 +453,10 @@ static void gap_params_init(void)
     gap_conn_params.max_conn_interval = MAX_CONN_INTERVAL;
     gap_conn_params.slave_latency     = SLAVE_LATENCY;
     gap_conn_params.conn_sup_timeout  = CONN_SUP_TIMEOUT;
+//	gap_conn_params.min_conn_interval = 6; //MIN_CONN_INTERVAL;
+//	gap_conn_params.max_conn_interval = 16; //MAX_CONN_INTERVAL;
+//	gap_conn_params.slave_latency     = SLAVE_LATENCY;
+//	gap_conn_params.conn_sup_timeout  = 400;
 
     err_code = sd_ble_gap_ppcp_set(&gap_conn_params);
     APP_ERROR_CHECK(err_code);
@@ -391,7 +469,9 @@ void gatt_evt_handler(nrf_ble_gatt_t * p_gatt, nrf_ble_gatt_evt_t const * p_evt)
     if ((m_conn_handle == p_evt->conn_handle) && (p_evt->evt_id == NRF_BLE_GATT_EVT_ATT_MTU_UPDATED))
     {
         m_ble_vband_max_data_len = p_evt->params.att_mtu_effective - 3;
+#if NRF_LOG_ENABLED
         NRF_LOG_INFO("Data len is set to 0x%X(%d)", m_ble_vband_max_data_len, m_ble_vband_max_data_len);
+#endif
     }
     NRF_LOG_DEBUG("ATT MTU exchange completed. central 0x%x peripheral 0x%x",
                   p_gatt->att_mtu_desired_central,
@@ -467,6 +547,10 @@ static void vband_data_handler(ble_vband_srv_evt_t * p_evt)
 
                 // update in main app
                 m_current_vband_mode = buf[1];
+                break;
+            case HEART_BEAT:
+                // save latest heart beat value
+                memcpy(&m_ble_heart_beat, (uint32_t *)&buf[1], sizeof(uint32_t));
                 break;
             default:
                 NRF_LOG_DEBUG("Invalid Config command written, ignoring");
@@ -623,22 +707,66 @@ static void sleep_mode_enter(void)
     err_code = bsp_indication_set(BSP_INDICATE_IDLE);
     APP_ERROR_CHECK(err_code);
 
+    // turn off buzzer
+    set_buzzer_status(BUZZER_OFF);
+
+    // turn off motor
+    // not implemented yet
+
+    // turn off led
+    set_led_status(LED_OFF);
+
+    // suspend tasks
+    vTaskSuspendAll();
+//    if(NULL != saadc_sample_timer_handle) vTaskSuspend(saadc_sample_timer_handle);
+    //if(NULL != ccs811_measure_task_handle) vTaskSuspend(ccs811_measure_task_handle);
+    //if(NULL != bme280_measure_task_handle) vTaskSuspend(bme280_measure_task_handle);
+    //if(NULL != max30105_measure_task_handle) vTaskSuspend(max30105_measure_task_handle);
+    //if(NULL != adxl362_measure_task_handle) vTaskSuspend(adxl362_measure_task_handle);
+    vband_saadc_disable_rtc();
+
+    // turn off analog section
+    nrf_gpio_pin_set(VSENSOR_POWER);
+
+    // set capacitive touch sensor to low power mode
+    nrf_gpio_pin_clear(CAPSENSOR_MODE);
+
+    // Put any connected sensors into shutdown mode, uninit TWI
+    vband_sensor_shutdown(BME280 | CCS811 | MAX30105 | ADXL362);
+       
+    // disable DCDC converter, need to use the softdevice functions because memory access is restricted
+    sd_power_dcdc_mode_set(NRF_POWER_DCDC_DISABLE);  // for core 2.7V to 1.3V
+    sd_power_dcdc0_mode_set(NRF_POWER_DCDC_DISABLE);  // for VDDH to 2.7V
+
+    //vTaskEndScheduler(); // not implemented?
+
+    // wait some time for tasks to finish, VDD to stablize
+    nrf_delay_ms(100);
+
 #ifndef BOARD_VBAND_V1
     // Prepare wakeup buttons.
     err_code = bsp_btn_ble_sleep_mode_prepare();
     APP_ERROR_CHECK(err_code);
+
+    // wait for adxl to indicate sleep state
+    adxl362_wait_for_sleep();
 
     // Prepare activity interrupt
     err_code = adxl362_configure_wakeup();
     APP_ERROR_CHECK(err_code);
 #endif
 
-    // Put any connected sensors into sleep mode
-    vband_sensor_shutdown(BME280 | CCS811 | MAX30105 | ADXL362);
-
+    // clear latched detect for motion interrupt
+    nrf_gpio_pin_latch_clear(ADXL362_INT1);
     // Go to system-off mode (this function will not return; wakeup will cause a reset).
-    err_code = sd_power_system_off();
-    APP_ERROR_CHECK(err_code);
+#if NRF_LOG_ENABLED
+    NRF_LOG_INFO("shut down");
+    NRF_LOG_FLUSH();
+#endif
+
+    sd_power_system_off();
+    
+    while(1);
 }
 
 
@@ -655,13 +783,17 @@ static void on_adv_evt(ble_adv_evt_t ble_adv_evt)
     switch (ble_adv_evt)
     {
         case BLE_ADV_EVT_FAST:
+#if NRF_LOG_ENABLED
             NRF_LOG_INFO("Fast advertising.");
+#endif
             err_code = bsp_indication_set(BSP_INDICATE_ADVERTISING);
             APP_ERROR_CHECK(err_code);
             break;
 
         case BLE_ADV_EVT_IDLE:
+#if NRF_LOG_ENABLED
             NRF_LOG_INFO("Advertising timeout.");
+#endif
             sleep_mode_enter();
             break;
 
@@ -683,12 +815,12 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
     switch (p_ble_evt->header.evt_id)
     {
         case BLE_GAP_EVT_CONNECTED:
-            // Put any connected sensors into measurement mode while advertising
-            vband_sensor_wakeup(BME280 | CCS811 | MAX30105 | ADXL362);
-
             m_ble_connected_bool = true;
+#if NRF_LOG_ENABLED
             NRF_LOG_INFO("Connected");
-            err_code = bsp_indication_set(BSP_INDICATE_ADVERTISING_SLOW);
+#endif
+            //err_code = bsp_indication_set(BSP_INDICATE_ADVERTISING_SLOW);
+            err_code = bsp_indication_set(BSP_INDICATE_IDLE);
             APP_ERROR_CHECK(err_code);
             m_conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
             err_code = nrf_ble_qwr_conn_handle_assign(&m_qwr, m_conn_handle);
@@ -696,16 +828,25 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
 
             // update config
             update_vband_config_characteristic();
+
+            // Put any connected sensors into measurement mode
+            vband_sensor_wakeup(BME280 | CCS811 | MAX30105 | ADXL362);
+
             break;
 
         case BLE_GAP_EVT_DISCONNECTED:
             // Put any connected sensors into sleep mode while advertising
-            vband_sensor_shutdown(BME280 | CCS811 | MAX30105 | ADXL362);
+//            vband_sensor_sleep(BME280 | CCS811 | MAX30105 | ADXL362);
 
             m_ble_connected_bool = false;
-            NRF_LOG_INFO("Disconnected");
+#if NRF_LOG_ENABLED
+            uint8_t disconnect_reason = p_ble_evt->evt.gap_evt.params.disconnected.reason;
+            if(disconnect_reason  == BLE_HCI_CONNECTION_TIMEOUT) { NRF_LOG_INFO("Disconnected, Conn Timeout"); }
+			else { NRF_LOG_INFO("Disconnected, other"); }
+#endif
             m_conn_handle = BLE_CONN_HANDLE_INVALID;
-            APP_ERROR_CHECK(err_code);                                                   
+//            APP_ERROR_CHECK(err_code);
+			ret_code_t err_code = ble_advertising_start(&m_advertising, BLE_ADV_MODE_FAST);
             break;
 
         case BLE_GAP_EVT_PHY_UPDATE_REQUEST:
@@ -759,6 +900,16 @@ static void ble_stack_init(void)
     uint32_t ram_start = 0;
     err_code = nrf_sdh_ble_default_cfg_set(APP_BLE_CONN_CFG_TAG, &ram_start);
     APP_ERROR_CHECK(err_code);
+
+#if 1
+	// increase the notification queue
+	ble_cfg_t ble_cfg;
+    memset(&ble_cfg, 0, sizeof ble_cfg);
+    ble_cfg.conn_cfg.conn_cfg_tag = APP_BLE_CONN_CFG_TAG;
+    ble_cfg.conn_cfg.params.gatts_conn_cfg.hvn_tx_queue_size = 3;
+    err_code = sd_ble_cfg_set(BLE_CONN_CFG_GATTS, &ble_cfg, ram_start);
+    APP_ERROR_CHECK(err_code);
+#endif
 
     // Enable BLE stack.
     err_code = nrf_sdh_ble_enable(&ram_start);
@@ -884,16 +1035,22 @@ static void advertising_init(void)
     ble_advertising_conn_cfg_tag_set(&m_advertising, APP_BLE_CONN_CFG_TAG);
 }
 
+static uint32_t log_timestamp(void)
+{
+  return nrf_rtc_counter_get(NRF_RTC1)*2594/84; // convert from 32khz tick to microseconds
+}
 
 /**@brief Function for initializing the nrf log module.
  */
 static void log_init(void)
 {
-    ret_code_t err_code = NRF_LOG_INIT(NULL);
+    ret_code_t err_code = NRF_LOG_INIT(log_timestamp);
     APP_ERROR_CHECK(err_code);
 
     NRF_LOG_DEFAULT_BACKENDS_INIT();
 }
+
+
 
 
 /**@brief Function for initializing buttons and leds.
@@ -932,7 +1089,7 @@ static void advertising_start(void * p_erase_bonds)
     }
 
     // Put any connected sensors into sleep mode while advertising
-    vband_sensor_shutdown(BME280 | CCS811 | MAX30105 | ADXL362);
+//    vband_sensor_sleep(BME280 | CCS811 | MAX30105 | ADXL362);
 }
 
 
@@ -951,12 +1108,15 @@ static void logger_thread(void * arg)
 
     while (1)
     {
+        //NRF_LOG_INFO("Idle");
         NRF_LOG_FLUSH();
 
         vTaskSuspend(NULL); // Suspend myself
     }
 }
 #endif //NRF_LOG_ENABLED
+
+// update_advertising() is not in SDK example
 
 static void update_advertising()
 {
@@ -1006,6 +1166,11 @@ void vApplicationIdleHook( void )
 #if NRF_LOG_ENABLED
      vTaskResume(m_logger_thread);
 #endif
+    __set_FPSCR(__get_FPSCR() & ~(0x0000009F)); 
+    (void) __get_FPSCR();
+    sd_nvic_ClearPendingIRQ(FPU_IRQn);
+    
+    //sd_app_evt_wait(); //does not lower current consumption
 }
 
 /**@brief Function for initializing the clock.
@@ -1014,7 +1179,7 @@ static void clock_init(void)
 {
     ret_code_t err_code = nrf_drv_clock_init();
     APP_ERROR_CHECK(err_code);
-    nrf_drv_clock_lfclk_request(NULL);
+    nrf_drv_clock_lfclk_request(NULL); // not in SDK exmaple
 }
 
 static void update_vband_config_characteristic(void)
@@ -1022,13 +1187,51 @@ static void update_vband_config_characteristic(void)
     //ble_vband_srv_config_mode_t op_mode;           /**< Operating Mode for Device. */
     //uint16_t                    alarm_threshold;   /**< Alarm Threshold. */
     static uint8_t p_data[BLE_VBAND_CONFIG_DATA_LEN];
-    static uint16_t p_data_length;
+    static uint16_t p_data_length = 6;
     
     memset(&p_data[0],0,BLE_VBAND_CONFIG_DATA_LEN);
     p_data[0] = m_current_vband_mode;
 
-    read_flash_alarm_threshold((uint32_t *)&p_data[1]);
+    read_flash_alarm_threshold((uint32_t *)&p_data[1]); // 4 bytes for alarm threshold
+
+    p_data[5] = m_usb_detected;
     vband_characteristic_update(ble_vband_srv_config_update, &p_data[0], &p_data_length);
+}
+
+/**@brief Function for checking BLE keep alive heart beat
+ */
+static void ble_heart_beat_check_task (void * pvParameter)
+{
+    static ret_code_t err_code;
+
+    UNUSED_PARAMETER(pvParameter);
+    while(1)
+    {
+        if(m_ble_connected_bool)
+        {
+            NRF_LOG_INFO("heart beat: %lu, last: %lu", m_ble_heart_beat, m_ble_heart_beat_last);
+/*            if(m_ble_heart_beat_last == m_ble_heart_beat)
+            {
+              NRF_LOG_INFO("try to disconnect");
+              // if heart beat value stays the same, then we have lost connection
+              err_code = sd_ble_gap_disconnect(m_conn_handle,
+                                               BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
+              if (err_code != NRF_SUCCESS)
+              {
+                NRF_LOG_INFO("error code: %d", err_code);
+                APP_ERROR_CHECK(err_code);
+              }
+              m_conn_handle = BLE_CONN_HANDLE_INVALID;
+              m_ble_heart_beat = 1;
+            }
+            else 
+            {
+              m_ble_heart_beat_last = m_ble_heart_beat;
+            }
+            */
+        }
+        vTaskDelay(HEART_BEAT_CHECK_INTERVAL);
+    }
 }
 
 /**@brief Function for pinging the CCS811 for a measurement.
@@ -1045,8 +1248,10 @@ static void ccs811_measure_task (void * pvParameter)
         {
             if(xSemaphoreTake(i2c_semaphore,CCS811_MEASURE_INTERVAL))
             {
-                get_sensor_data(CCS811, &p_data[0], &p_data_length);
-                vband_characteristic_update(ble_vband_srv_gas_sensor_update, &p_data[0], &p_data_length);
+                if(get_sensor_data(CCS811, &p_data[0], &p_data_length) == WEDGE_SENSOR_SUCCESS)
+                {
+                  vband_characteristic_update(ble_vband_srv_gas_sensor_update, &p_data[0], &p_data_length);
+                }
                 xSemaphoreGive(i2c_semaphore);
             }
         }
@@ -1069,8 +1274,10 @@ static void bme280_measure_task (void * pvParameter)
         {
             if(xSemaphoreTake(i2c_semaphore,BME280_MEASURE_INTERVAL))
             {
-                get_sensor_data(BME280, &p_data[0], &p_data_length);
-                vband_characteristic_update(ble_vband_srv_temp_humid_pressure_update, &p_data[0], &p_data_length);
+                if(get_sensor_data(BME280, &p_data[0], &p_data_length) == WEDGE_SENSOR_SUCCESS)
+                {
+                  vband_characteristic_update(ble_vband_srv_temp_humid_pressure_update, &p_data[0], &p_data_length);
+                }
                 xSemaphoreGive(i2c_semaphore);
             }
         }
@@ -1095,7 +1302,8 @@ static void max30105_measure_task (void * pvParameter)
         {
             if(xSemaphoreTake(i2c_semaphore,thread_interval))
             {
-                get_sensor_data(MAX30105, &p_data[0], &p_data_length);
+                if(get_sensor_data(MAX30105, &p_data[0], &p_data_length) == WEDGE_SENSOR_SUCCESS)
+                {
                 /*if(p_data[0] != current_state)
                 {
                     current_state = p_data[0];
@@ -1109,7 +1317,8 @@ static void max30105_measure_task (void * pvParameter)
                     }
                 }*/
 
-                vband_characteristic_update(ble_vband_srv_optical_sensor_update, &p_data[0], &p_data_length);
+                  vband_characteristic_update(ble_vband_srv_optical_sensor_update, &p_data[0], &p_data_length);
+                }
                 xSemaphoreGive(i2c_semaphore);
             }
         }
@@ -1130,18 +1339,21 @@ static void adxl362_measure_task (void * pvParameter)
     UNUSED_PARAMETER(pvParameter);
     while(1)
     {
-        get_sensor_data(ADXL362, &p_data[0], &p_data_length);
-        if(m_ble_connected_bool)
+        if(get_sensor_data(ADXL362, &p_data[0], &p_data_length) == WEDGE_SENSOR_SUCCESS)
         {
-            vband_characteristic_update(ble_vband_srv_accelerometer_update, &p_data[0], &p_data_length);
-            consecutive_unawakes = (p_data[6] == 0) ? (consecutive_unawakes + 1) : 0;
-            if((consecutive_unawakes*ADXL362_MEASURE_INTERVAL) >= timeout_ms)
-            {
-                NRF_LOG_ERROR("Inactivity while connected timeout.");
-                sleep_mode_enter();
-            }
+          if(m_ble_connected_bool)
+          {
+              vband_characteristic_update(ble_vband_srv_accelerometer_update, &p_data[0], &p_data_length);
+              consecutive_unawakes = (p_data[6] == 0) ? (consecutive_unawakes + 1) : 0;
+              if((consecutive_unawakes*ADXL362_MEASURE_INTERVAL) >= timeout_ms)
+              {
+                  NRF_LOG_ERROR("Inactivity while connected timeout.");
+                  sleep_mode_enter();
+              }
+          }
         }
         else consecutive_unawakes = 0; // we only increment this while we're connected, the advertising timeout should go to sleep
+
         vTaskDelay(ADXL362_MEASURE_INTERVAL);
     }
 }
@@ -1151,41 +1363,58 @@ static void adxl362_measure_task (void * pvParameter)
  */
 static void external_sensor_init(void)
 {
-    BaseType_t xReturned;
-
+//    BaseType_t xReturned;
 #ifdef BOARD_PCA10056
-    // initialize i2c + spi sensors
-    vband_sensor_init(BME280 | MAX30105 | ADXL362);
+    uint16_t enabled_sensors = ADXL362 | BME280 | MAX30105;
 #else
-    //vband_sensor_init(ADXL362);
-    vband_sensor_init(ADXL362 | BME280 | MAX30105 | SIMULATE);
+    //uint16_t enabled_sensors = ADXL362 | VSENSOR;
+    //uint16_t enabled_sensors = ADXL362 | VSENSOR | BME280 | CCS811 | MAX30105 | POZYX;
+    //uint16_t enabled_sensors = ADXL362 | VSENSOR | POZYX;
+    uint16_t enabled_sensors = ADXL362 | VSENSOR | BME280 | CCS811 | MAX30105;
+    //uint16_t enabled_sensors = ADXL362 | VSENSOR | BME280 | MAX30105 | CCS811 | SIMULATE;
 #endif
-    
+
+    enabled_sensors = vband_sensor_init(enabled_sensors);
 
     // start tasks for each sensor
-    xReturned = xTaskCreate(ccs811_measure_task, "CCS811", configMINIMAL_STACK_SIZE + 200, NULL, 1, &ccs811_measure_task_handle);
-    if (xReturned != pdPASS)
+    if(enabled_sensors & CCS811)
     {
+      if(pdPASS != xTaskCreate(ccs811_measure_task, "CCS811", configMINIMAL_STACK_SIZE + 200, NULL, 1, &ccs811_measure_task_handle))
+      {
         NRF_LOG_ERROR("CCS811 task not created.");
         APP_ERROR_HANDLER(NRF_ERROR_NO_MEM);
+      }
+      //else NRF_LOG_INFO("CCS811 task created");
     }
-    xReturned = xTaskCreate(bme280_measure_task, "BME280", configMINIMAL_STACK_SIZE + 200, NULL, 1, &bme280_measure_task_handle);
-    if (xReturned != pdPASS)
+
+    if(enabled_sensors & BME280)
     {
+      if(pdPASS != xTaskCreate(bme280_measure_task, "BME280", configMINIMAL_STACK_SIZE + 200, NULL, 1, &bme280_measure_task_handle))
+      {
         NRF_LOG_ERROR("BME280 task not created.");
         APP_ERROR_HANDLER(NRF_ERROR_NO_MEM);
+      }
+      //else NRF_LOG_INFO("BME280 task created");
     }
-    xReturned = xTaskCreate(max30105_measure_task, "MAX30105", configMINIMAL_STACK_SIZE + 200, NULL, 1, &max30105_measure_task_handle);
-    if (xReturned != pdPASS)
+
+    if(enabled_sensors & MAX30105)
     {
+      if(pdPASS != xTaskCreate(max30105_measure_task, "MAX30105", configMINIMAL_STACK_SIZE + 200, NULL, 1, &max30105_measure_task_handle))
+      {
         NRF_LOG_ERROR("MAX30105 task not created.");
         APP_ERROR_HANDLER(NRF_ERROR_NO_MEM);
+      }
+      //else NRF_LOG_INFO("MAX30105 task created");
     }
-    xReturned = xTaskCreate(adxl362_measure_task, "ADXL362", configMINIMAL_STACK_SIZE + 200, NULL, 1, &adxl362_measure_task_handle);
-    if (xReturned != pdPASS)
+
+    if(enabled_sensors & ADXL362)
     {
+      if(pdPASS != xTaskCreate(adxl362_measure_task, "ADXL362", configMINIMAL_STACK_SIZE + 200, NULL, 1, &adxl362_measure_task_handle))
+      {
         NRF_LOG_ERROR("ADXL362 task not created.");
         APP_ERROR_HANDLER(NRF_ERROR_NO_MEM);
+      }
+      //else NRF_LOG_INFO("ADXL362 task created");
     }
 }
 
@@ -1235,7 +1464,7 @@ static void saadc_run_voltage_alarm_algorithm(float * adc_ch1, float * adc_ch2, 
     current_alarm_status = check_for_voltage_detection(&p_data[0], adc_ch1, adc_ch2, adc_ch3, len);
 
     // control buzzer
-    if(current_alarm_status == true)
+    if((current_alarm_status == true) && (m_usb_detected == false))
     {
         set_buzzer_status(BUZZER_ON_ALARM); // consecutive states return without re-initializing
     }
@@ -1254,17 +1483,17 @@ static void saadc_run_voltage_alarm_algorithm(float * adc_ch1, float * adc_ch2, 
 
 static void saadc_init(void)
 {
-    BaseType_t xReturned;
+//    BaseType_t xReturned;
     
     saadc_assign_callback_fn(saadc_run_voltage_alarm_algorithm);
 
     // start tasks for each sensor
-    xReturned = xTaskCreate(saadc_sample_task, "SAADC", configMINIMAL_STACK_SIZE + 200, NULL, 1, &saadc_sample_timer_handle);
-    if (xReturned != pdPASS)
+    if(pdPASS != xTaskCreate(saadc_sample_task, "SAADC", configMINIMAL_STACK_SIZE + 200, NULL, 1, &saadc_sample_timer_handle))
     {
         NRF_LOG_ERROR("SAADC task not created.");
         APP_ERROR_HANDLER(NRF_ERROR_NO_MEM);
     }
+    else NRF_LOG_INFO("SAADC task created");
 }
 
 /**@brief Function for application main entry.
@@ -1272,17 +1501,30 @@ static void saadc_init(void)
 int main(void)
 {
     bool erase_bonds = false;
-
+    float battery_voltage = 0;
+    NRF_POWER->RESETREAS =  0xffffffff;
     // Initialize semaphores
     i2c_semaphore = xSemaphoreCreateMutex();
 
     // Initialize modules.
+#if NRF_LOG_ENABLED
     log_init();
+#endif
     clock_init();
 
+    // initialize GPIO
+    nrf_gpio_cfg_output(BUZZER_GPIO);
+    nrf_gpio_cfg_output(MOTOR_GPIO);
+    nrf_gpio_cfg_output(LED_1);
+    nrf_gpio_cfg_output(CCS811_WAKEUP_PIN);
+    nrf_gpio_pin_set(CCS811_WAKEUP_PIN);
+    nrf_gpio_cfg_input(CAPSENSOR_BUTTON0, NRF_GPIO_PIN_NOPULL);
+    nrf_gpio_cfg_input(CAPSENSOR_BUTTON1, NRF_GPIO_PIN_NOPULL);
+
+
     // enable DCDCs to reduce power consumption
-    NRF_POWER->DCDCEN = 1;
-    NRF_POWER->DCDCEN0 = 1;
+    NRF_POWER->DCDCEN = 1;  // for core 2.7V to 1.3V
+    NRF_POWER->DCDCEN0 = 1; // for VDDH to 2.7V
 
     // Do not start any interrupt that uses system functions before system initialisation.
     // The best solution is to start the OS before any other initalisation.
@@ -1293,12 +1535,15 @@ int main(void)
     {
         APP_ERROR_HANDLER(NRF_ERROR_NO_MEM);
     }
+    else NRF_LOG_INFO("LOGGER task created");
 #endif
 
     // Activate deep sleep mode.
     SCB->SCR |= SCB_SCR_SLEEPDEEP_Msk;
 
+#if NRF_LOG_ENABLED
     NRF_LOG_INFO("Reboot.");
+#endif
 
     // Initialize modules.
     initialize_flash();
@@ -1306,7 +1551,14 @@ int main(void)
     // Set advertising name from flash
     if (!read_flash_ble_advertisement_name(&m_ble_advertising_name[0]))
     {
-        memcpy(&m_ble_advertising_name[0], (const uint8_t *)DEVICE_NAME, strlen(DEVICE_NAME));
+        if(sizeof(DEVICE_NAME) <= MAX_BLE_NAME_LENGTH)
+        {
+          memcpy(&m_ble_advertising_name[0], (const uint8_t *)DEVICE_NAME, sizeof(DEVICE_NAME));
+        }
+        else
+        {
+          ASSERT(false); // default device name is too long
+        }
     }
 
     // Set alarm threshold from flash
@@ -1315,6 +1567,9 @@ int main(void)
     {
         set_voltage_alarm_threshold(&flash_alarm_threshold);
     }
+    // temporary set threshold high
+    //flash_alarm_threshold = 30000;
+    //set_voltage_alarm_threshold(&flash_alarm_threshold);
 
     // Set engineering mode from flash
     if (!read_flash_active_mode(&m_current_vband_mode))
@@ -1322,10 +1577,14 @@ int main(void)
         m_current_vband_mode = BLE_VBAND_SRV_MODE_ENGINEERING; // if invalid flash default to normal mode
     }
 
+#if NRF_LOG_ENABLED
+    NRF_LOG_FLUSH();
+#endif
+
     // Configure and initialize the BLE stack.
     ble_stack_init();
 
-    timers_init();
+    timers_init(); // FreeRTOS timers
     buttons_leds_init(&erase_bonds);
     gap_params_init();
     gatt_init();
@@ -1334,18 +1593,62 @@ int main(void)
     sensor_simulator_init();
     conn_params_init();
     //peer_manager_init();
-    application_timers_start(); // this includes the timer for the SAADC sampling, should only do this while connected (power saving)
+    application_timers_start(); // starts FreeRTOS timers (Battery update)
+
+#if NRF_LOG_ENABLED
+    NRF_LOG_INFO("going to sensor init");
+    NRF_LOG_FLUSH();
+#endif
     
     // added for VBAND functions
     external_sensor_init();
     saadc_init();
 
+
+    //pm_peers_delete();
+#if NRF_LOG_ENABLED
+    NRF_LOG_INFO("passed initialization");
+    NRF_LOG_FLUSH();
+#endif
+
+    // check battery level. if battery is too low, go to sleep
+ #if defined(BOARD_VWEDGE_V1)
+   
+    vband_saadc_sample_electrode_channels();
+    while(battery_voltage == 0)
+    //while(1)
+    {
+//      NRF_LOG_INFO("waiting for battery voltage measurement");
+      vband_saadc_read_battery_voltage(&battery_voltage);
+    }
+    //NRF_LOG_INFO("Battery at %1.2fV",battery_voltage*2.0989f);
+    NRF_LOG_INFO("Battery at: " NRF_LOG_FLOAT_MARKER, NRF_LOG_FLOAT(battery_voltage));
+    if(battery_voltage < 0.51f)
+    {
+      NRF_LOG_INFO("Battery level low, shutdown");
+      //nrf_delay_ms(2000); // need some delay for the accelerometer to assert sleep interrupt
+      nrf_sdh_freertos_init(sleep_mode_enter, NULL);
+      vTaskStartScheduler();
+    }
+    
+ #endif
+ 
+    if(pdPASS != xTaskCreate(ble_heart_beat_check_task, "BLEHB", configMINIMAL_STACK_SIZE + 200, NULL, 1, &m_heart_beat_thread))
+    {
+      NRF_LOG_ERROR("heart beat checking task not created.");
+      APP_ERROR_HANDLER(NRF_ERROR_NO_MEM);
+    }
+
     // Create a FreeRTOS task for the BLE stack.
     // The task will run advertising_start() before entering its loop.
-    //pm_peers_delete();
+
     nrf_sdh_freertos_init(advertising_start, &erase_bonds);
 
+#if NRF_LOG_ENABLED
     NRF_LOG_INFO("Voltage Band FreeRTOS Scheduler started.");
+    NRF_LOG_FLUSH();
+#endif
+
     // Start FreeRTOS scheduler.
     vTaskStartScheduler();
 
@@ -1355,4 +1658,23 @@ int main(void)
     }
 }
 
+
+#if defined(configCHECK_FOR_STACK_OVERFLOW) && configCHECK_FOR_STACK_OVERFLOW
+
+//*****************************************************************************
+//
+// This hook is called by FreeRTOS when an stack overflow error is detected.
+//
+//*****************************************************************************
+void vApplicationStackOverflowHook(xTaskHandle *pxTask, char *pcTaskName) {
+    //
+    // This function can not return, so loop forever.  Interrupts are disabled
+    // on entry to this function, so no processor interrupts will interrupt
+    // this loop.
+    //
+    while(1) {
+    }
+}
+
+#endif
 

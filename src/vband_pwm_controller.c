@@ -49,7 +49,8 @@
 
 #include <stdio.h>
 #include <string.h>
-#include "nrf_drv_pwm.h"
+//#include "nrf_drv_pwm.h"
+#include "nrfx_pwm.h"
 #include "app_error.h"
 #include "boards.h"
 #include "vband_pwm_controller.h"
@@ -67,10 +68,10 @@
 #define BUZZER_WARNING_PWM_PERIOD             2000  /**< in msec, how often the PWM signal should be turned on */
 #define BUZZER_WARNING_PWM_PERIOD_ON          1000  /**< in msec, how long the PWM signal is activated per period */
 
-#define BUZZER_ALARM_PWM_FREQUENCY            4000  /**< in Hz, the frequency at which the PWM signal changes */
-#define BUZZER_ALARM_PWM_DUTY_CYCLE             50  /**< in %, the duty cycle of PWM signal */
-#define BUZZER_ALARM_PWM_PERIOD                500  /**< in msec, how often the PWM signal should be turned on */
-#define BUZZER_ALARM_PWM_PERIOD_ON             250  /**< in msec, how long the PWM signal is activated per period */
+#define BUZZER_ALARM_PWM_FREQUENCY            2400  /**< in Hz, the frequency at which the PWM signal changes */
+#define BUZZER_ALARM_PWM_DUTY_CYCLE             10  /**< in %, the duty cycle of PWM signal 0-100 */
+#define BUZZER_ALARM_PWM_PERIOD                100  /**< in msec, how often the PWM signal should be turned on */
+#define BUZZER_ALARM_PWM_PERIOD_ON              20  /**< in msec, how long the PWM signal is activated per period */
 
 #define LED_BLE_ADVERTISTING_PWM_FREQUENCY          1000  /**< in Hz, the frequency at which the PWM signal changes */
 #define LED_BLE_ADVERTISTING_PWM_DUTY_CYCLE          100  /**< in %, the duty cycle of PWM signal */
@@ -82,10 +83,10 @@
 #define LED_BLE_CONNECTED_PWM_PERIOD                3000  /**< in msec, how often the PWM signal should be turned on */
 #define LED_BLE_CONNECTED_PWM_PERIOD_ON              250  /**< in msec, how long the PWM signal is activated per period */
 
-static nrf_drv_pwm_t m_pwm0 = NRF_DRV_PWM_INSTANCE(0); // Assign channel 0 to Buzzer
-static nrf_drv_pwm_t m_pwm1 = NRF_DRV_PWM_INSTANCE(1);
-static nrf_drv_pwm_t m_pwm2 = NRF_DRV_PWM_INSTANCE(2);
-static nrf_drv_pwm_t m_pwm3 = NRF_DRV_PWM_INSTANCE(3);
+static nrfx_pwm_t m_pwm0 = NRFX_PWM_INSTANCE(0); // Assign channel 0 to Buzzer
+static nrfx_pwm_t m_pwm1 = NRFX_PWM_INSTANCE(1);
+static nrfx_pwm_t m_pwm2 = NRFX_PWM_INSTANCE(2);
+static nrfx_pwm_t m_pwm3 = NRFX_PWM_INSTANCE(3);
 
 // This is for tracking PWM instances being used, so we can unintialize only
 // the relevant ones when switching from one demo to another.
@@ -93,33 +94,35 @@ static nrf_drv_pwm_t m_pwm3 = NRF_DRV_PWM_INSTANCE(3);
 static uint8_t m_used = 0;
 static pwm_config_vals new_pwm0_vals = {BUZZER_GPIO,0,0,0,0,false};
 static pwm_config_vals new_pwm1_vals = {LED_1,0,0,0,0,false};
-static pwm_config_vals new_pwm2_vals = {0,0,0,0,0,false};
+static pwm_config_vals new_pwm2_vals = {MOTOR_GPIO,0,0,0,0,false};
 static pwm_config_vals new_pwm3_vals = {0,0,0,0,0,false};
 static nrf_pwm_values_common_t /*const*/ stay_off_values[2] = { 0, 0 };
 
-static void configure_pwm_instance(nrf_drv_pwm_t *m_pwmX, pwm_config_vals *new_pwmX_vals)
+static void configure_pwm_instance(nrfx_pwm_t *m_pwmX, pwm_config_vals *new_pwmX_vals)
 {
-    uint16_t top_value = (1e6 / new_pwmX_vals->pwm_frequency);
-    uint16_t duty_value = (top_value * new_pwmX_vals->pwm_duty_cycle) / 100;    
+    uint16_t top_value = (1000000 / new_pwmX_vals->pwm_frequency);
+    uint16_t duty_value = (top_value * (100-new_pwmX_vals->pwm_duty_cycle)) / 100;    
     uint32_t repeats   = (uint32_t) (new_pwmX_vals->pwm_frequency / 1000) * new_pwmX_vals->pwm_period_on / 2;
     uint32_t end_delay = (uint32_t) (new_pwmX_vals->pwm_frequency / 1000) * (new_pwmX_vals->pwm_period - new_pwmX_vals->pwm_period_on) / 2;
-    nrf_drv_pwm_config_t const configX =
+    nrfx_pwm_config_t const configX =
     {
         .output_pins =
         {
-            new_pwmX_vals->gpio | NRF_DRV_PWM_PIN_INVERTED, // channel 0
-            NRF_DRV_PWM_PIN_NOT_USED,             // channel 1
-            NRF_DRV_PWM_PIN_NOT_USED,             // channel 2
-            NRF_DRV_PWM_PIN_NOT_USED,             // channel 3
+            //new_pwmX_vals->gpio | NRFX_PWM_PIN_INVERTED, // channel 0
+            new_pwmX_vals->gpio, // channel 0
+            NRFX_PWM_PIN_NOT_USED,             // channel 1
+            NRFX_PWM_PIN_NOT_USED,             // channel 2
+            NRFX_PWM_PIN_NOT_USED,             // channel 3
         },
-        .irq_priority = APP_IRQ_PRIORITY_LOWEST,
+        //.irq_priority = APP_IRQ_PRIORITY_LOWEST,
+        .irq_priority = 8, // lower than Lowest (7)
         .base_clock   = NRF_PWM_CLK_1MHz,
         .count_mode   = NRF_PWM_MODE_UP,
         .top_value    = top_value,
         .load_mode    = NRF_PWM_LOAD_COMMON,
         .step_mode    = NRF_PWM_STEP_AUTO
     };
-    APP_ERROR_CHECK(nrf_drv_pwm_init(m_pwmX, &configX, NULL));;
+    APP_ERROR_CHECK(nrfx_pwm_init(m_pwmX, &configX, NULL));
 
     // This array cannot be allocated on stack (hence "static") and it must
     // be in RAM (hence no "const", though its content is not changed).
@@ -135,7 +138,8 @@ static void configure_pwm_instance(nrf_drv_pwm_t *m_pwmX, pwm_config_vals *new_p
         .repeats         = repeats,
         .end_delay       = 0
     };
-
+    stay_off_values[0] = top_value;
+    stay_off_values[1] = top_value;
     // Sequence 1 - off, duration: (new_pwmX_vals->pwm_period - new_pwmX_vals->pwm_period_on) ms.
     nrf_pwm_sequence_t const seq1 =
     {
@@ -146,9 +150,9 @@ static void configure_pwm_instance(nrf_drv_pwm_t *m_pwmX, pwm_config_vals *new_p
     };
 
     if (new_pwmX_vals->loop_flag)
-      (void)nrf_drv_pwm_complex_playback(m_pwmX, &seq0, &seq1, 1, NRF_DRV_PWM_FLAG_LOOP);
+      nrfx_pwm_complex_playback(m_pwmX, &seq0, &seq1, 1, NRF_DRV_PWM_FLAG_LOOP);
     else
-      (void)nrf_drv_pwm_complex_playback(m_pwmX, &seq0, &seq1, 1, NRF_DRV_PWM_FLAG_STOP);
+      nrfx_pwm_complex_playback(m_pwmX, &seq0, &seq1, 1, NRF_DRV_PWM_FLAG_STOP);
 }
 
 void set_buzzer_status(buzzer_status_t new_status)
@@ -165,7 +169,15 @@ void set_buzzer_status(buzzer_status_t new_status)
     // need to turn off before any state change
     if (m_used & USED_PWM(0))
     {
-        nrf_drv_pwm_uninit(&m_pwm0);
+        if(nrfx_pwm_is_stopped(&m_pwm0) == false)
+        {
+          if(nrfx_pwm_stop(&m_pwm0, true) == false)
+          {
+            NRF_LOG_INFO("PWM0 not stopping");
+          }
+        }
+        nrfx_pwm_uninit(&m_pwm0);
+        nrf_gpio_pin_clear(BUZZER_GPIO); // make sure buzzer pin output is low
         m_used ^= USED_PWM(0);
     }
 
