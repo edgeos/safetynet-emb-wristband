@@ -1069,6 +1069,9 @@ static uint32_t compensate_pressure(const struct bme280_uncomp_data *uncomp_data
 	uint32_t pressure_min = 30000;
 	uint32_t pressure_max = 110000;
 
+	// if pressure is disabled
+	if(uncomp_data->pressure == 0x80000) return 0;
+
 	var1 = (((int32_t)calib_data->t_fine) / 2) - (int32_t)64000;
 	var2 = (((var1 / 4) * (var1 / 4)) / 2048) * ((int32_t)calib_data->dig_P6);
 	var2 = var2 + ((var1 * ((int32_t)calib_data->dig_P5)) * 2);

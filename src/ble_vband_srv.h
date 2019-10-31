@@ -73,7 +73,8 @@ typedef enum
 /**@brief Voltage Band event type. */
 typedef enum
 {
-    BLE_VBAND_SRV_EVT_CONFIG_UPDATED /**< Battery value notification enabled event. */
+    BLE_VBAND_SRV_EVT_CONFIG_UPDATED, /**< Battery value notification enabled event. */
+    BLE_VBAND_SRV_EVT_WRITE_EN
 } ble_vband_srv_evt_type_t;
 
 /**@brief Voltage Band configuration data. */

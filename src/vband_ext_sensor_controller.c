@@ -342,12 +342,12 @@ static int8_t bme280_stream_sensor_data_forced_mode(struct bme280_dev *dev, uint
 
     if (!simulate_on)
     {
-        /* Recommended mode of operation: Humidity Sensing (p17 of datasheet) */
+		// Set BME280 operating mode
         dev->settings.osr_h = BME280_OVERSAMPLING_1X;
-        dev->settings.osr_p = BME280_NO_OVERSAMPLING;
+        dev->settings.osr_p = BME280_OVERSAMPLING_4X;
         dev->settings.osr_t = BME280_OVERSAMPLING_1X;
-        dev->settings.filter = BME280_FILTER_COEFF_OFF;
-        settings_sel = BME280_OSR_TEMP_SEL | BME280_OSR_HUM_SEL;
+        dev->settings.filter = BME280_FILTER_COEFF_4;
+        settings_sel = BME280_OSR_PRESS_SEL | BME280_OSR_TEMP_SEL | BME280_OSR_HUM_SEL | BME280_FILTER_SEL;
         rslt = bme280_set_sensor_settings(settings_sel, dev);
 
         /* Ping for sensor data */
@@ -546,21 +546,32 @@ static void get_ccs811_measurement(uint8_t * p_data, uint16_t * p_data_length)
     
     static uint16_t eCO2 = 0;
     static uint16_t TVOC = 0;
+	static uint8_t nError = 0;
     if (!simulate_on)
     {
-        ccs811_measure(&i2c_dev_ccs811, &eCO2, &TVOC);
+        ccs811_measure(&i2c_dev_ccs811, &eCO2, &TVOC, &nError);
     }
     else
     {
         eCO2++;
         TVOC++;
     }
-    NRF_LOG_INFO("CO2:  %d  , TVOC:  %d", eCO2, TVOC);
+	/* error bitfields
+		0 WRITE_REG_INVALID The CCS811 received an I²C write request addressed to this station but with invalid register address ID
+		1 READ_REG_INVALID The CCS811 received an I²C read request to a mailbox ID that is invalid
+		2 MEASMODE_INVALID The CCS811 received an I²C request to write an unsupported mode to MEAS_MODE
+		3 MAX_RESISTANCE The sensor resistance measurement has reached or exceeded the maximum range
+		4 HEATER_FAULT The Heater current in the CCS811 is not in range
+		5 HEATER_SUPPLY The Heat
+		*/
+
+    NRF_LOG_INFO("CO2: %d, TVOC: %d, Error %d", eCO2, TVOC, nError);
 
     // package for BLE
     memcpy(&data_buffer[0], &eCO2, sizeof(eCO2));
     memcpy(&data_buffer[2], &TVOC, sizeof(TVOC));
-    data_buffer_length = 4;
+	data_buffer[4] = nError;
+    data_buffer_length = 5;
 
     // assign pointers
     memcpy(p_data, &data_buffer[0], data_buffer_length);

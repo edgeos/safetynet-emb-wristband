@@ -66,7 +66,7 @@ bool ccs811_start_mode(struct ccs811_dev *dev, uint8_t mode);
 void ccs811_calibrate(struct ccs811_dev *dev, int16_t temperature_c, uint8_t humidity_pct);
 
 /**@brief read measurement, return true if new data */
-bool ccs811_measure(struct ccs811_dev *dev, uint16_t *eCO2, uint16_t *TVOC);
+bool ccs811_measure(struct ccs811_dev *dev, uint16_t *eCO2, uint16_t *TVOC, uint8_t* pError);
 
 /**@brief shutdown */
 bool ccs811_idle(struct ccs811_dev *dev);

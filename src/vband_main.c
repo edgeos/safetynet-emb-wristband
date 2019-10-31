@@ -215,7 +215,7 @@ static TaskHandle_t m_logger_thread;                                /**< Definit
 
 static void advertising_start(void * p_erase_bonds);
 static void update_advertising(void);
-static void update_vband_config_characteristic(void);
+void update_vband_config_characteristic(void);
 
 bool        is_new_alarm_threshold = false;
 uint32_t    new_alarm_threshold = 0;
@@ -533,13 +533,20 @@ static void vband_data_handler(ble_vband_srv_evt_t * p_evt)
                 update_advertising();
                 break;
             case ALARM_THRESHOLD:
-                // write to flash
-                write_flash_alarm_threshold((uint32_t *)&buf[1]);
-                nrf_delay_ms(10);
-
-                // update in algorithm, must be thread-safe
-                is_new_alarm_threshold = true;
-                memcpy(&new_alarm_threshold, (uint32_t *)&buf[1], sizeof(uint32_t));
+				new_alarm_threshold = *((uint32_t*) (buf + 1));
+				if(new_alarm_threshold  != -1) {
+					// write to flash
+					write_flash_alarm_threshold(&new_alarm_threshold);
+					nrf_delay_ms(10);
+					// update in algorithm, must be thread-safe
+					is_new_alarm_threshold = true;
+					NRF_LOG_INFO("** New Alarm Level %d", new_alarm_threshold);
+					for(int i = 0; i < 10; ++i)
+						if(is_new_alarm_threshold)
+							vTaskDelay(0);
+				} else {
+					NRF_LOG_INFO("** Alarm Level Requested");
+				}
                 break;
             case DEFAULT_MODE:
                 // write to flash
@@ -559,7 +566,12 @@ static void vband_data_handler(ble_vband_srv_evt_t * p_evt)
 
         // update characteristic back to show current config
         update_vband_config_characteristic();
-    }
+    }/* else if(p_evt->type == BLE_VBAND_SRV_EVT_WRITE_EN) {
+		if(m_bSendAlarm) {
+			m_bSendAlarm = false;
+			update_vband_config_characteristic();
+		}
+	}*/
 }
 
 /**@brief Function for initializing services that will be used by the application.
@@ -825,9 +837,6 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
             m_conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
             err_code = nrf_ble_qwr_conn_handle_assign(&m_qwr, m_conn_handle);
             APP_ERROR_CHECK(err_code);
-
-            // update config
-            update_vband_config_characteristic();
 
             // Put any connected sensors into measurement mode
             vband_sensor_wakeup(BME280 | CCS811 | MAX30105 | ADXL362);
@@ -1182,7 +1191,7 @@ static void clock_init(void)
     nrf_drv_clock_lfclk_request(NULL); // not in SDK exmaple
 }
 
-static void update_vband_config_characteristic(void)
+void update_vband_config_characteristic(void)
 {
     //ble_vband_srv_config_mode_t op_mode;           /**< Operating Mode for Device. */
     //uint16_t                    alarm_threshold;   /**< Alarm Threshold. */

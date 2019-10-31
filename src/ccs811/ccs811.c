@@ -152,24 +152,23 @@ void ccs811_calibrate(struct ccs811_dev *dev, int16_t temperature_c, uint8_t hum
 }
 
 /**@brief read measurement */
-bool ccs811_measure(struct ccs811_dev *dev, uint16_t *eCO2, uint16_t *TVOC)
+bool ccs811_measure(struct ccs811_dev *dev, uint16_t *eCO2, uint16_t *TVOC, uint8_t* pError)
 {
     // enable i2c comms
     ccs811_twi_enable();
 
     // read the status register to check for a new measurement
-    uint8_t rx_buffer[32];
+    uint8_t rx_buffer[4];
     dev->read(dev->dev_id, CCS811_REG_STATUS, rx_buffer, 1);
     uint8_t status_rdy = rx_buffer[0] & 0x99; // bit 0 is active error
-    dev->read(dev->dev_id, CCS811_REG_MEAS_MODE, rx_buffer, 1);
-    uint8_t meas_mode = rx_buffer[0]; // bit 0 is active error
-    if (status_rdy == 0x98)
-    {
+    dev->read(dev->dev_id, CCS811_REG_MEAS_MODE, rx_buffer + 1, 1);
+    uint8_t meas_mode = rx_buffer[1];
+	if(pError) dev->read(dev->dev_id, CCS811_REG_ERROR_ID, pError, 1);
+    if (status_rdy == 0x98) {
         dev->read(dev->dev_id, CCS811_REG_ALG_RESULTS_DATA, rx_buffer, 4);
         *eCO2 = (uint16_t) (rx_buffer[0] << 8) + rx_buffer[1];
         *TVOC = (uint16_t) (rx_buffer[2] << 8) + rx_buffer[3];
     }
-    
     // disable i2c comms
     ccs811_twi_disable();
     return (status_rdy == 0x98) ? true:false;

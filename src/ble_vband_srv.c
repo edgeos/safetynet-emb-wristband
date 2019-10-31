@@ -36,13 +36,14 @@ static void on_write(ble_vband_srv_t * p_vband_srv, ble_evt_t const * p_ble_evt)
     evt.p_vband_srv = p_vband_srv;
     evt.conn_handle = p_ble_evt->evt.gatts_evt.conn_handle;
     //evt.p_link_ctx  = p_client;
+	bool bWriteEn = false;
 
     if ((p_evt_write->handle == p_vband_srv->alarm_state_handles.cccd_handle) &&
         (p_evt_write->len == 2))
     {
         if (ble_srv_is_notification_enabled(p_evt_write->data))
         {
-            p_vband_srv->is_notification_supported_alarm = true;
+            bWriteEn = p_vband_srv->is_notification_supported_alarm = true;
         }
         else
         {
@@ -55,7 +56,7 @@ static void on_write(ble_vband_srv_t * p_vband_srv, ble_evt_t const * p_ble_evt)
         if (ble_srv_is_notification_enabled(p_evt_write->data))
         {
             //NRF_LOG_INFO("accel notification enabled");
-            p_vband_srv->is_notification_supported_accel_d = true;
+            bWriteEn = p_vband_srv->is_notification_supported_accel_d = true;
         }
         else
         {
@@ -67,7 +68,7 @@ static void on_write(ble_vband_srv_t * p_vband_srv, ble_evt_t const * p_ble_evt)
     {
         if (ble_srv_is_notification_enabled(p_evt_write->data))
         {
-            p_vband_srv->is_notification_supported_thp_d = true;
+            bWriteEn = p_vband_srv->is_notification_supported_thp_d = true;
         }
         else
         {
@@ -79,7 +80,7 @@ static void on_write(ble_vband_srv_t * p_vband_srv, ble_evt_t const * p_ble_evt)
     {
         if (ble_srv_is_notification_enabled(p_evt_write->data))
         {
-            p_vband_srv->is_notification_supported_gas_d = true;
+            bWriteEn = p_vband_srv->is_notification_supported_gas_d = true;
         }
         else
         {
@@ -91,7 +92,7 @@ static void on_write(ble_vband_srv_t * p_vband_srv, ble_evt_t const * p_ble_evt)
     {
         if (ble_srv_is_notification_enabled(p_evt_write->data))
         {
-            p_vband_srv->is_notification_supported_opt_d = true;
+            bWriteEn = p_vband_srv->is_notification_supported_opt_d = true;
         }
         else
         {
@@ -103,7 +104,7 @@ static void on_write(ble_vband_srv_t * p_vband_srv, ble_evt_t const * p_ble_evt)
     {
         if (ble_srv_is_notification_enabled(p_evt_write->data))
         {
-            p_vband_srv->is_notification_supported_stream_d = true;
+            bWriteEn = p_vband_srv->is_notification_supported_stream_d = true;
         }
         else
         {
@@ -130,6 +131,10 @@ static void on_write(ble_vband_srv_t * p_vband_srv, ble_evt_t const * p_ble_evt)
     {
         // Do Nothing. This event is not relevant for this service.
     }
+//	if(bWriteEn) {
+//        evt.type = BLE_VBAND_SRV_EVT_WRITE_EN;
+//        p_vband_srv->evt_handler(&evt);/
+//	}
 }
 
 static uint32_t update_characteristic(ble_vband_srv_t * p_vband_srv,
