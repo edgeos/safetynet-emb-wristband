@@ -1376,10 +1376,10 @@ static void external_sensor_init(void)
 #ifdef BOARD_PCA10056
     uint16_t enabled_sensors = ADXL362 | BME280 | MAX30105;
 #else
-    //uint16_t enabled_sensors = ADXL362 | VSENSOR;
+    uint16_t enabled_sensors = ADXL362 | VSENSOR;
     //uint16_t enabled_sensors = ADXL362 | VSENSOR | BME280 | CCS811 | MAX30105 | POZYX;
     //uint16_t enabled_sensors = ADXL362 | VSENSOR | POZYX;
-    uint16_t enabled_sensors = ADXL362 | VSENSOR | BME280 | CCS811 | MAX30105;
+    //uint16_t enabled_sensors = ADXL362 | VSENSOR | BME280 | CCS811 | MAX30105;
     //uint16_t enabled_sensors = ADXL362 | VSENSOR | BME280 | MAX30105 | CCS811 | SIMULATE;
 #endif
 
