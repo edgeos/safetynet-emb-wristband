@@ -46,6 +46,19 @@ Builds
 
   $ROOT/target/<board>/<soft_device>/ses/Outputs
 
+
+Using GitHub Desktop
+====================
+
+- Because of proxy server, for GitHub Desktop to resolve the domain name and connect to github.com, follow these steps:
+	1. Open the file .gitconfig in Windows directory C:\Users\\*yourusername*\ using a text editor
+	2. Add the following two lines:
+
+	[http]
+		proxy = http://servername:8080
+
+where the servername can be found by reading the line that starts with `var Main_Proxy` in the proxy script at http://myapps.setpac.ge.com/pac.pac
+
  
 Application
 ===========
