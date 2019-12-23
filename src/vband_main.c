@@ -1525,8 +1525,8 @@ int main(void)
     nrf_gpio_cfg_output(BUZZER_GPIO);
     nrf_gpio_cfg_output(MOTOR_GPIO);
     nrf_gpio_cfg_output(LED_1);
-    nrf_gpio_cfg_output(CCS811_WAKEUP_PIN);
-    nrf_gpio_pin_set(CCS811_WAKEUP_PIN);
+//    nrf_gpio_cfg_output(CCS811_WAKEUP_PIN);
+//    nrf_gpio_pin_set(CCS811_WAKEUP_PIN);
     nrf_gpio_cfg_input(CAPSENSOR_BUTTON0, NRF_GPIO_PIN_NOPULL);
     nrf_gpio_cfg_input(CAPSENSOR_BUTTON1, NRF_GPIO_PIN_NOPULL);
 

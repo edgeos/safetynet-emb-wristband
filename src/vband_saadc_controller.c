@@ -206,16 +206,31 @@ static void vband_saadc_electrode_channels_init(void)
     // detect presence of 5V charging on pin 0.02 AIN0
     nrf_saadc_channel_config_t channel_config4 =
         NRFX_SAADC_DEFAULT_CHANNEL_CONFIG_SE(NRF_SAADC_INPUT_AIN0);
+#elif defined(BOARD_VWEDGE_WRIST)
+    nrf_saadc_channel_config_t channel_config0 =
+        NRFX_SAADC_DEFAULT_CHANNEL_CONFIG_SE(NRF_SAADC_INPUT_AIN1);
+    nrf_saadc_channel_config_t channel_config1 =
+        NRFX_SAADC_DEFAULT_CHANNEL_CONFIG_SE(NRF_SAADC_INPUT_AIN2);
+    nrf_saadc_channel_config_t channel_config2 =
+        NRFX_SAADC_DEFAULT_CHANNEL_CONFIG_SE(NRF_SAADC_INPUT_AIN3);
+
+    // using VDDH/5 as input for battery monitoring, need to modify sdk to allow for this selection, otherwise we get ASSERT error
+    nrf_saadc_channel_config_t channel_config3 =
+        NRFX_SAADC_DEFAULT_CHANNEL_CONFIG_SE(SAADC_CH_PSELP_PSELP_VDDHDIV5);
+
+    // detect presence of 5V charging on pin 0.02 AIN0
+    nrf_saadc_channel_config_t channel_config4 =
+        NRFX_SAADC_DEFAULT_CHANNEL_CONFIG_SE(NRF_SAADC_INPUT_AIN0);
 #else
     nrf_saadc_channel_config_t channel_config0 =
-        NRFX__SAADC_DEFAULT_CHANNEL_CONFIG_SE(NRF_SAADC_INPUT_AIN0);
+        NRFX_SAADC_DEFAULT_CHANNEL_CONFIG_SE(NRF_SAADC_INPUT_AIN0);
     nrf_saadc_channel_config_t channel_config1 =
-        NRFX__SAADC_DEFAULT_CHANNEL_CONFIG_SE(NRF_SAADC_INPUT_AIN4);
+        NRFX_SAADC_DEFAULT_CHANNEL_CONFIG_SE(NRF_SAADC_INPUT_AIN4);
     nrf_saadc_channel_config_t channel_config2 =
-        NRFX__SAADC_DEFAULT_CHANNEL_CONFIG_SE(NRF_SAADC_INPUT_AIN6);
+        NRFX_SAADC_DEFAULT_CHANNEL_CONFIG_SE(NRF_SAADC_INPUT_AIN6);
     // battery VDD, can use defaults
     nrf_saadc_channel_config_t channel_config3 =
-        NRFX__SAADC_DEFAULT_CHANNEL_CONFIG_SE(NRF_SAADC_INPUT_VDD);
+        NRFX_SAADC_DEFAULT_CHANNEL_CONFIG_SE(NRF_SAADC_INPUT_VDD);
 #endif
 
     channel_config0.gain =  channel_config1.gain =  channel_config2.gain = NRF_SAADC_GAIN1_4; // set gain to 1/4

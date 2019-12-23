@@ -44,6 +44,8 @@
   #include "vband_v1.h"
 #elif defined(BOARD_VWEDGE_V1)
   #include "vwedge_v1.h"
+#elif defined(BOARD_VWEDGE_WRIST)
+  #include "vwedge_wrist.h"
 #else
   #error "Board is not defined"
 #endif
