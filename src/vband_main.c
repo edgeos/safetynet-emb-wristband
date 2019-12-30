@@ -115,8 +115,9 @@
 #define MAX30105_MEASURE_HEART_RATE_INTERVAL        15                                      /**< MAX30105 proximity measurement interval (ms). */
 #define ADXL362_MEASURE_INTERVAL                    75                                      /**< ADXL362 measurement interval (ms). */
 #define ADXL362_INACTIVITY_WHILE_CONNECTED_TIMEOUT  600                                     /**< ADXL362 sleep interval while connected (seconds). */
+#define USB_DETECT_TIMEOUT_VALUE                    2                                      /**< the number of consecutive times the USB detect must be the opposite state to flip the state. decrement every battery level check (2 sec) */
 
-#define DEVICE_NAME                         "GE GRC Wrist 2"                        /**< Name of device. Will be included in the advertising data. */
+#define DEVICE_NAME                         "GER WedgeV2"                        /**< Name of device. Will be included in the advertising data. */
 #define MANUFACTURER_NAME                   "GE"                                    /**< Manufacturer. Will be passed to Device Information Service. */
 #define VBAND_SERVICE_UUID_TYPE             BLE_UUID_TYPE_VENDOR_BEGIN              /**< UUID type for the Voltage Band Service (vendor specific). */
 
@@ -125,9 +126,9 @@
 
 #define APP_ADV_INTERVAL                    160                                     /**< The advertising interval (in units of 0.625 ms. This value corresponds to 1000 ms). */
 #ifdef BOARD_VBAND_V1
-  #define APP_ADV_DURATION                  3000 //180000                           /**< The advertising duration (30 seconds) in units of 10 milliseconds. */
-#elif defined(VWEDGE_V1_H)
-  #define APP_ADV_DURATION                  10000                                    /**< The advertising duration (30 seconds) in units of 10 milliseconds. */
+  #define APP_ADV_DURATION                  3000                                    /**< The advertising duration (30 seconds) in units of 10 milliseconds. */
+#elif BOARD_VWEDGE_V2
+  #define APP_ADV_DURATION                  1500                                    /**< The advertising duration (30 seconds) in units of 10 milliseconds. */
 #else
   #define APP_ADV_DURATION                  3000                                    /**< The advertising duration (30 seconds) in units of 10 milliseconds. */
 #endif
@@ -182,12 +183,15 @@ static sensorsim_cfg_t   m_battery_sim_cfg;                         /**< Battery
 static sensorsim_state_t m_battery_sim_state;                       /**< Battery Level sensor simulator state. */
 
 static bool m_ble_connected_bool = false;
+static bool m_ble_was_connected_bool = false;
 static bool m_usb_detected = true;
 
 static char m_ble_advertising_name[MAX_BLE_NAME_LENGTH] = {0}; // defined in vband_flash_controller.h
 static ble_vband_srv_config_mode_t m_current_vband_mode = BLE_VBAND_SRV_MODE_ENGINEERING;//BLE_VBAND_SRV_MODE_NORMAL;
 static uint32_t m_ble_heart_beat = 1; // 32 bit number for keep alive heart beat from tablet app
 static uint32_t m_ble_heart_beat_last = 2; // last heart beat value
+
+static uint16_t m_buzzer_block_timeout = 0; // a timeout mechanism to prevent buzzer state being updated for some set time. used in the voltage alarm function, happening every 100ms
 
 static ble_uuid_t m_adv_uuids[] =                                   /**< Universally unique service identifiers. */
 {
@@ -267,6 +271,7 @@ static void battery_level_update(void)
 {
     ret_code_t err_code;
     static uint8_t battery_level;
+    static uint8_t usb_detect_timeout = USB_DETECT_TIMEOUT_VALUE;
     float battery_voltage;
     float usb_voltage;
 
@@ -288,7 +293,7 @@ static void battery_level_update(void)
     {
         battery_level = 10-(2.55f-battery_voltage)/10;
     }
-#elif defined(BOARD_VWEDGE_V1)
+#elif defined(BOARD_VWEDGE_V1) || defined(BOARD_VWEDGE_V2)
     vband_saadc_read_battery_voltage(&battery_voltage);
 #if NRF_LOG_ENABLED
     //NRF_LOG_INFO("battery_voltage " NRF_LOG_FLOAT_MARKER, NRF_LOG_FLOAT(battery_voltage));
@@ -307,11 +312,57 @@ static void battery_level_update(void)
         battery_level = 10-(0.54f-battery_voltage)*230;
     }
     //NRF_LOG_INFO("battery_level=%d", battery_level);
-
+ #if defined(BOARD_VWEDGE_V2)
+    if(m_usb_detected)
+    {
+      if (nrf_gpio_pin_read(USB_DETECT_PIN))
+      {
+        usb_detect_timeout = USB_DETECT_TIMEOUT_VALUE;
+      }
+      else
+      {
+        //NRF_LOG_INFO("USB detect Low, timeout %d", usb_detect_timeout);
+        usb_detect_timeout--;
+      }
+      if(usb_detect_timeout == 0)
+      {
+        m_usb_detected = false;
+        //NRF_LOG_INFO("Charging stopped: " NRF_LOG_FLOAT_MARKER, NRF_LOG_FLOAT(usb_voltage));
+        NRF_LOG_INFO("Charging stopped");
+        if(m_ble_connected_bool) update_vband_config_characteristic();
+      }
+    }
+    else
+    {
+      if (nrf_gpio_pin_read(USB_DETECT_PIN))
+      {
+        usb_detect_timeout--;
+      }
+      else
+      {
+        usb_detect_timeout = USB_DETECT_TIMEOUT_VALUE;
+      }
+      if(usb_detect_timeout == 0)
+      {
+        m_usb_detected = true;
+        //NRF_LOG_INFO("Charging started: " NRF_LOG_FLOAT_MARKER, NRF_LOG_FLOAT(usb_voltage));
+        NRF_LOG_INFO("Charging started");
+        if(m_ble_connected_bool) update_vband_config_characteristic();
+      }
+    }
+ #else
     vband_saadc_read_usb_voltage(&usb_voltage);
     if(m_usb_detected)
     {
       if (usb_voltage < 1.1f)
+      {
+        usb_detect_timeout--;
+      }
+      else
+      {
+        usb_detect_timeout = USB_DETECT_TIMEOUT_VALUE;
+      }
+      if(usb_detect_timeout == 0)
       {
         m_usb_detected = false;
         NRF_LOG_INFO("Charging stopped: " NRF_LOG_FLOAT_MARKER, NRF_LOG_FLOAT(usb_voltage));
@@ -323,12 +374,20 @@ static void battery_level_update(void)
       //NRF_LOG_INFO("usb_voltage " NRF_LOG_FLOAT_MARKER, NRF_LOG_FLOAT(usb_voltage));
       if (usb_voltage >= 1.1f)
       {
+        usb_detect_timeout--;
+      }
+      else
+      {
+        usb_detect_timeout = USB_DETECT_TIMEOUT_VALUE;
+      }
+      if(usb_detect_timeout == 0)
+      {
         m_usb_detected = true;
         NRF_LOG_INFO("Charging started: " NRF_LOG_FLOAT_MARKER, NRF_LOG_FLOAT(usb_voltage));
         if(m_ble_connected_bool) update_vband_config_characteristic();
       }
     }
-
+ #endif
 #else
     battery_level = (uint8_t)sensorsim_measure(&m_battery_sim_state, &m_battery_sim_cfg);
 #endif
@@ -370,7 +429,7 @@ static void vband_characteristic_update(ble_vband_char_update_t char_update, uin
 		err_code = char_update(&m_vband, p_data, p_length, m_conn_handle);
 
 		if(err_code != NRF_SUCCESS) {
-		  NRF_LOG_INFO("char update failed %d", err_code);
+		  NRF_LOG_INFO("char update failed error: %d", err_code);
 		  if ((err_code != NRF_SUCCESS) &&
 			  (err_code != NRF_ERROR_INVALID_STATE) &&
 			  (err_code != NRF_ERROR_RESOURCES) &&
@@ -720,7 +779,7 @@ static void sleep_mode_enter(void)
     APP_ERROR_CHECK(err_code);
 
     // turn off buzzer
-    set_buzzer_status(BUZZER_OFF);
+    set_buzzer_status(BUZZER_OFF, BUZZER_LOOP_FOREVER);
 
     // turn off motor
     // not implemented yet
@@ -745,7 +804,10 @@ static void sleep_mode_enter(void)
 
     // Put any connected sensors into shutdown mode, uninit TWI
     vband_sensor_shutdown(BME280 | CCS811 | MAX30105 | ADXL362);
-       
+    
+    nrf_gpio_cfg_default(CCS811_WAKEUP_PIN);
+    nrf_gpio_cfg_default(CCS811_RESET_PIN);
+
     // disable DCDC converter, need to use the softdevice functions because memory access is restricted
     sd_power_dcdc_mode_set(NRF_POWER_DCDC_DISABLE);  // for core 2.7V to 1.3V
     sd_power_dcdc0_mode_set(NRF_POWER_DCDC_DISABLE);  // for VDDH to 2.7V
@@ -755,7 +817,7 @@ static void sleep_mode_enter(void)
     // wait some time for tasks to finish, VDD to stablize
     nrf_delay_ms(100);
 
-#ifndef BOARD_VBAND_V1
+#if defined(BOARD_VWEDGE_V1) || defined(BOARD_VWEDGE_V2)
     // Prepare wakeup buttons.
     err_code = bsp_btn_ble_sleep_mode_prepare();
     APP_ERROR_CHECK(err_code);
@@ -840,6 +902,9 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
 
             // Put any connected sensors into measurement mode
             vband_sensor_wakeup(BME280 | CCS811 | MAX30105 | ADXL362);
+
+            m_buzzer_block_timeout = 15;
+            set_buzzer_status(BUZZER_ON_LONG_BEEP, BUZZER_LOOP_1);
 
             break;
 
@@ -1179,6 +1244,21 @@ void vApplicationIdleHook( void )
     (void) __get_FPSCR();
     sd_nvic_ClearPendingIRQ(FPU_IRQn);
     
+    // check if BLE was connected
+    if(m_ble_connected_bool)
+    {
+      if(~m_ble_was_connected_bool)
+      {
+        m_ble_was_connected_bool = true;
+        // BLE connected, make a sound indication
+        //set_buzzer_status(BUZZER_ON_LONG_BEEP, BUZZER_LOOP_1);
+      }
+    }
+    else
+    {
+      m_ble_was_connected_bool = false;
+    }
+
     //sd_app_evt_wait(); //does not lower current consumption
 }
 
@@ -1375,12 +1455,12 @@ static void external_sensor_init(void)
 //    BaseType_t xReturned;
 #ifdef BOARD_PCA10056
     uint16_t enabled_sensors = ADXL362 | BME280 | MAX30105;
+#elif BOARD_VWEDGE_V2
+    uint16_t enabled_sensors = ADXL362 | VSENSOR | BME280 | CCS811;
+    //uint16_t enabled_sensors = ADXL362 | VSENSOR | BME280;
 #else
-    uint16_t enabled_sensors = ADXL362 | VSENSOR;
+    uint16_t enabled_sensors = ADXL362 | VSENSOR | BME280 | CCS811 | MAX30105;
     //uint16_t enabled_sensors = ADXL362 | VSENSOR | BME280 | CCS811 | MAX30105 | POZYX;
-    //uint16_t enabled_sensors = ADXL362 | VSENSOR | POZYX;
-    //uint16_t enabled_sensors = ADXL362 | VSENSOR | BME280 | CCS811 | MAX30105;
-    //uint16_t enabled_sensors = ADXL362 | VSENSOR | BME280 | MAX30105 | CCS811 | SIMULATE;
 #endif
 
     enabled_sensors = vband_sensor_init(enabled_sensors);
@@ -1473,13 +1553,21 @@ static void saadc_run_voltage_alarm_algorithm(float * adc_ch1, float * adc_ch2, 
     current_alarm_status = check_for_voltage_detection(&p_data[0], adc_ch1, adc_ch2, adc_ch3, len);
 
     // control buzzer
-    if((current_alarm_status == true) && (m_usb_detected == false))
+    // do not touch buzzer while the timeout counter is positive
+    if(m_buzzer_block_timeout)
     {
-        set_buzzer_status(BUZZER_ON_ALARM); // consecutive states return without re-initializing
+        m_buzzer_block_timeout--;
     }
     else
     {
-        set_buzzer_status(BUZZER_OFF);
+        if((current_alarm_status == true) && (m_usb_detected == false))
+        {
+            set_buzzer_status(BUZZER_ON_ALARM, BUZZER_LOOP_FOREVER); // consecutive states return without re-initializing
+        }
+        else
+        {
+            set_buzzer_status(BUZZER_OFF, BUZZER_LOOP_FOREVER);
+        }
     }
 
     // update ble
@@ -1525,11 +1613,33 @@ int main(void)
     nrf_gpio_cfg_output(BUZZER_GPIO);
     nrf_gpio_cfg_output(MOTOR_GPIO);
     nrf_gpio_cfg_output(LED_1);
-//    nrf_gpio_cfg_output(CCS811_WAKEUP_PIN);
-//    nrf_gpio_pin_set(CCS811_WAKEUP_PIN);
+#ifdef BOARD_VWEDGE_V2
+    nrf_gpio_cfg(CCS811_WAKEUP_PIN, NRF_GPIO_PIN_DIR_OUTPUT, NRF_GPIO_PIN_INPUT_DISCONNECT, NRF_GPIO_PIN_PULLUP, NRF_GPIO_PIN_S0D1, NRF_GPIO_PIN_NOSENSE);
+    nrf_gpio_cfg(CCS811_RESET_PIN, NRF_GPIO_PIN_DIR_OUTPUT, NRF_GPIO_PIN_INPUT_DISCONNECT, NRF_GPIO_PIN_NOPULL, NRF_GPIO_PIN_S0D1, NRF_GPIO_PIN_NOSENSE);
+#else
+    nrf_gpio_cfg_output(CCS811_WAKEUP_PIN);
+#endif
+    nrf_gpio_pin_set(CCS811_WAKEUP_PIN);
+    nrf_gpio_pin_set(CCS811_RESET_PIN);
     nrf_gpio_cfg_input(CAPSENSOR_BUTTON0, NRF_GPIO_PIN_NOPULL);
     nrf_gpio_cfg_input(CAPSENSOR_BUTTON1, NRF_GPIO_PIN_NOPULL);
 
+#ifdef ADXL362_POWER_ON
+    nrf_gpio_cfg_output(ADXL362_POWER_ON);
+    nrf_gpio_pin_clear(ADXL362_POWER_ON);
+#endif
+
+#ifdef LDO_SET_PIN
+    nrf_gpio_cfg_output(LDO_SET_PIN);
+    nrf_gpio_pin_clear(LDO_SET_PIN);
+#endif
+#ifdef LDO_1_8_EN_PIN
+    nrf_gpio_cfg_output(LDO_1_8_EN_PIN);
+    nrf_gpio_pin_clear(LDO_1_8_EN_PIN);
+#endif
+#ifdef USB_DETECT_PIN
+    nrf_gpio_cfg_input(USB_DETECT_PIN, NRF_GPIO_PIN_NOPULL);
+#endif
 
     // enable DCDCs to reduce power consumption
     NRF_POWER->DCDCEN = 1;  // for core 2.7V to 1.3V
@@ -1621,13 +1731,11 @@ int main(void)
 #endif
 
     // check battery level. if battery is too low, go to sleep
- #if defined(BOARD_VWEDGE_V1)
+#if defined(BOARD_VWEDGE_V1) || defined(BOARD_VWEDGE_V2)
    
     vband_saadc_sample_electrode_channels();
     while(battery_voltage == 0)
-    //while(1)
     {
-//      NRF_LOG_INFO("waiting for battery voltage measurement");
       vband_saadc_read_battery_voltage(&battery_voltage);
     }
     //NRF_LOG_INFO("Battery at %1.2fV",battery_voltage*2.0989f);
@@ -1639,9 +1747,13 @@ int main(void)
       nrf_sdh_freertos_init(sleep_mode_enter, NULL);
       vTaskStartScheduler();
     }
-    
- #endif
- 
+#endif
+
+    // battery is ok, make a boot up sound
+    set_buzzer_status(BUZZER_ON_ALARM, BUZZER_LOOP_2);
+    //set_buzzer_status(BUZZER_ON_LONG_BEEP, BUZZER_LOOP_1);
+    //set_buzzer_status(BUZZER_ON_WARNING, BUZZER_LOOP_1);
+
     if(pdPASS != xTaskCreate(ble_heart_beat_check_task, "BLEHB", configMINIMAL_STACK_SIZE + 200, NULL, 1, &m_heart_beat_thread))
     {
       NRF_LOG_ERROR("heart beat checking task not created.");

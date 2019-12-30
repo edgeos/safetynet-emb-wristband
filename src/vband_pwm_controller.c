@@ -73,6 +73,11 @@
 #define BUZZER_ALARM_PWM_PERIOD                100  /**< in msec, how often the PWM signal should be turned on */
 #define BUZZER_ALARM_PWM_PERIOD_ON              20  /**< in msec, how long the PWM signal is activated per period */
 
+#define BUZZER_LONG_BEEP_PWM_FREQUENCY            3600  /**< in Hz, the frequency at which the PWM signal changes */
+#define BUZZER_LONG_BEEP_PWM_DUTY_CYCLE              5  /**< in %, the duty cycle of PWM signal 0-100 */
+#define BUZZER_LONG_BEEP_PWM_PERIOD               1500  /**< in msec, how often the PWM signal should be turned on */
+#define BUZZER_LONG_BEEP_PWM_PERIOD_ON            1200  /**< in msec, how long the PWM signal is activated per period */
+
 #define LED_BLE_ADVERTISTING_PWM_FREQUENCY          1000  /**< in Hz, the frequency at which the PWM signal changes */
 #define LED_BLE_ADVERTISTING_PWM_DUTY_CYCLE          100  /**< in %, the duty cycle of PWM signal */
 #define LED_BLE_ADVERTISTING_PWM_PERIOD             1000  /**< in msec, how often the PWM signal should be turned on */
@@ -98,7 +103,7 @@ static pwm_config_vals new_pwm2_vals = {MOTOR_GPIO,0,0,0,0,false};
 static pwm_config_vals new_pwm3_vals = {0,0,0,0,0,false};
 static nrf_pwm_values_common_t /*const*/ stay_off_values[2] = { 0, 0 };
 
-static void configure_pwm_instance(nrfx_pwm_t *m_pwmX, pwm_config_vals *new_pwmX_vals)
+static void configure_pwm_instance(nrfx_pwm_t *m_pwmX, pwm_config_vals *new_pwmX_vals, uint16_t playback_count)
 {
     uint16_t top_value = (1000000 / new_pwmX_vals->pwm_frequency);
     uint16_t duty_value = (top_value * (100-new_pwmX_vals->pwm_duty_cycle)) / 100;    
@@ -150,12 +155,12 @@ static void configure_pwm_instance(nrfx_pwm_t *m_pwmX, pwm_config_vals *new_pwmX
     };
 
     if (new_pwmX_vals->loop_flag)
-      nrfx_pwm_complex_playback(m_pwmX, &seq0, &seq1, 1, NRF_DRV_PWM_FLAG_LOOP);
+      nrfx_pwm_complex_playback(m_pwmX, &seq0, &seq1, playback_count, NRF_DRV_PWM_FLAG_LOOP);
     else
-      nrfx_pwm_complex_playback(m_pwmX, &seq0, &seq1, 1, NRF_DRV_PWM_FLAG_STOP);
+      nrfx_pwm_complex_playback(m_pwmX, &seq0, &seq1, playback_count, NRF_DRV_PWM_FLAG_STOP);
 }
 
-void set_buzzer_status(buzzer_status_t new_status)
+void set_buzzer_status(buzzer_status_t new_status, buzzer_loop_count_t playback_count)
 {
     static buzzer_status_t current_status = BUZZER_OFF;
 
@@ -182,6 +187,14 @@ void set_buzzer_status(buzzer_status_t new_status)
     }
 
     bool config_buzzer_flag = true;
+    if(playback_count == BUZZER_LOOP_FOREVER) {
+        new_pwm0_vals.loop_flag =      true;
+        playback_count = 1;
+    }
+    else
+    {
+        new_pwm0_vals.loop_flag =      false;
+    }
     switch (current_status)
     {
         case BUZZER_OFF:
@@ -194,7 +207,6 @@ void set_buzzer_status(buzzer_status_t new_status)
             new_pwm0_vals.pwm_duty_cycle = BUZZER_WARNING_PWM_DUTY_CYCLE;
             new_pwm0_vals.pwm_period =     BUZZER_WARNING_PWM_PERIOD;
             new_pwm0_vals.pwm_period_on =  BUZZER_WARNING_PWM_PERIOD_ON;
-            new_pwm0_vals.loop_flag =      true;
             break;
         case BUZZER_ON_ALARM:
             NRF_LOG_INFO("Transition to alarm buzzer");
@@ -202,7 +214,13 @@ void set_buzzer_status(buzzer_status_t new_status)
             new_pwm0_vals.pwm_duty_cycle = BUZZER_ALARM_PWM_DUTY_CYCLE;
             new_pwm0_vals.pwm_period =     BUZZER_ALARM_PWM_PERIOD;
             new_pwm0_vals.pwm_period_on =  BUZZER_ALARM_PWM_PERIOD_ON;
-            new_pwm0_vals.loop_flag =      true;
+            break;
+        case BUZZER_ON_LONG_BEEP:
+            NRF_LOG_INFO("Transition to alarm long beep");
+            new_pwm0_vals.pwm_frequency =  BUZZER_LONG_BEEP_PWM_FREQUENCY;
+            new_pwm0_vals.pwm_duty_cycle = BUZZER_LONG_BEEP_PWM_DUTY_CYCLE;
+            new_pwm0_vals.pwm_period =     BUZZER_LONG_BEEP_PWM_PERIOD;
+            new_pwm0_vals.pwm_period_on =  BUZZER_LONG_BEEP_PWM_PERIOD_ON;
             break;
         default:
             break;
@@ -212,7 +230,7 @@ void set_buzzer_status(buzzer_status_t new_status)
     if (config_buzzer_flag)
     {
         m_used |= USED_PWM(0);
-        (void)configure_pwm_instance(&m_pwm0, &new_pwm0_vals);
+        (void)configure_pwm_instance(&m_pwm0, &new_pwm0_vals, (uint16_t)playback_count);
     }
 }
 
@@ -265,7 +283,7 @@ void set_led_status(led_status_t new_status)
     if (config_buzzer_flag)
     {
       m_used |= USED_PWM(1);
-      (void)configure_pwm_instance(&m_pwm1, &new_pwm1_vals);
+      (void)configure_pwm_instance(&m_pwm1, &new_pwm1_vals, 1);
     }
 }
 

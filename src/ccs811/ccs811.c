@@ -46,30 +46,51 @@ void ccs811_chip_reset(void)
     }
     if(!pin_cfg)
     {
+
+#ifdef BOARD_VWEDGE_V2
+        // wedge V2 reset workaround
+        nrf_gpio_cfg(CCS811_WAKEUP_PIN, NRF_GPIO_PIN_DIR_OUTPUT, NRF_GPIO_PIN_INPUT_DISCONNECT, NRF_GPIO_PIN_PULLUP, NRF_GPIO_PIN_S0D1, NRF_GPIO_PIN_NOSENSE);
+        nrf_gpio_cfg(CCS811_RESET_PIN, NRF_GPIO_PIN_DIR_OUTPUT, NRF_GPIO_PIN_INPUT_DISCONNECT, NRF_GPIO_PIN_NOPULL, NRF_GPIO_PIN_S0D1, NRF_GPIO_PIN_NOSENSE);
+#else
         nrf_drv_gpiote_out_config_t out_config = GPIOTE_CONFIG_OUT_SIMPLE(false); // false = init low = WAKEUP
         APP_ERROR_CHECK(nrf_drv_gpiote_out_init(CCS811_WAKEUP_PIN, &out_config));
         APP_ERROR_CHECK(nrf_drv_gpiote_out_init(CCS811_RESET_PIN, &out_config));
+#endif
         pin_cfg = true;
     }
+#ifdef BOARD_VWEDGE_V2
+// wedge V2 reset is not working
+    nrf_gpio_pin_clear(CCS811_RESET_PIN);
+    nrf_delay_ms(10);
+    nrf_gpio_pin_set(CCS811_RESET_PIN);
+    nrf_delay_ms(100);
+#else
     nrf_drv_gpiote_out_clear(CCS811_RESET_PIN);
     nrf_delay_ms(10);
     nrf_drv_gpiote_out_set(CCS811_RESET_PIN);
     nrf_delay_ms(10); // datasheet says max reset time is 2ms
+#endif
 }
 
 /**@brief I2C enable on - WAKEUP pin control */
 void ccs811_twi_enable(void)
 {
-    //nrf_gpio_pin_clear(CCS811_WAKEUP_PIN);
+#ifdef BOARD_VWEDGE_V2
+    nrf_gpio_pin_clear(CCS811_WAKEUP_PIN);
+#else
     nrf_drv_gpiote_out_clear(CCS811_WAKEUP_PIN);
+#endif
     nrf_delay_us(500);
 }
 
 /**@brief I2C enable off - WAKEUP pin control*/
 void ccs811_twi_disable(void)
 {
-    //nrf_gpio_pin_set(CCS811_WAKEUP_PIN);
+#ifdef BOARD_VWEDGE_V2
+    nrf_gpio_pin_set(CCS811_WAKEUP_PIN);
+#else
     nrf_drv_gpiote_out_set(CCS811_WAKEUP_PIN); // set = high = off
+#endif
 }
 
 /**@brief Function for initializing the CCS811 I2C driver.
@@ -91,6 +112,8 @@ bool ccs811_init(struct ccs811_dev *dev)
 
     // disable i2c comms
     ccs811_twi_disable();
+
+    NRF_LOG_INFO("CCS811 HW_ID read: %d", rx_buffer[0]);
 
     /* Verify Device ID matches expected */
     return (rx_buffer[0] == CCS811_HW_ID) ? true:false;

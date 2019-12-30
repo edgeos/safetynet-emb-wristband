@@ -516,8 +516,11 @@ static void sensor_ccs811_init(void)
     i2c_dev_ccs811.read = twi_read;
     i2c_dev_ccs811.write = twi_write;
     nrf_gpio_pin_clear(CCS811_WAKEUP_PIN);
+    nrf_delay_ms(1);
     if (scan_for_twi_device(CCS811_ADDR))
     {
+        nrf_gpio_pin_set(CCS811_WAKEUP_PIN);
+        NRF_LOG_INFO("going to init CCS811");
         if(ccs811_init(&i2c_dev_ccs811) == true)
         {
             enabled_sensors |= CCS811;
@@ -530,13 +533,21 @@ static void sensor_ccs811_init(void)
         else
         {
           NRF_LOG_WARNING("CCS811 HW_ID does not match!");
+          nrf_gpio_pin_clear(CCS811_RESET_PIN);
         }
     }
     else
     {
         NRF_LOG_WARNING("CCS811 not found! Skipping...");
+        nrf_gpio_pin_set(CCS811_WAKEUP_PIN);
+        nrf_gpio_pin_clear(CCS811_RESET_PIN);
     }
+
+//#ifdef BOARD_VWEDGE_V2
+
+//#else
     nrf_gpio_pin_set(CCS811_WAKEUP_PIN);
+//#endif
 }
 
 static void get_ccs811_measurement(uint8_t * p_data, uint16_t * p_data_length)
@@ -733,6 +744,23 @@ uint16_t vband_sensor_init(sensor_type_t use_sensors)
     }
     else
     {
+#ifdef LDO_1_8_EN_PIN
+        // turn off 1.8V LDO
+        //nrf_gpio_pin_clear(LDO_1_8_EN_PIN);// needed for VWedge2.0 with the 2.7V discharge problem
+        nrf_gpio_cfg_output(SCL_PIN);// needed for VWedge2.0 with the 2.7V discharge problem
+        nrf_gpio_pin_clear(SCL_PIN);// needed for VWedge2.0 with the 2.7V discharge problem
+        nrf_gpio_cfg_output(SDA_PIN);// needed for VWedge2.0 with the 2.7V discharge problem
+        nrf_gpio_pin_clear(SDA_PIN);// needed for VWedge2.0 with the 2.7V discharge problem
+#endif
+        if(use_sensors & ADXL362)
+        {
+            sensor_adxl362_init();
+        }
+#ifdef LDO_1_8_EN_PIN
+        // turn on 1.8V LDO
+        nrf_gpio_pin_set(LDO_1_8_EN_PIN);
+        nrf_delay_ms(10);
+#endif
         twi_init();
         if(use_sensors & MAX30105)
         {
@@ -746,10 +774,6 @@ uint16_t vband_sensor_init(sensor_type_t use_sensors)
         {  
             sensor_bme280_init();
         }   
-        if(use_sensors & ADXL362)
-        {
-            sensor_adxl362_init();
-        }
         if(use_sensors & VSENSOR)
         {
             // set GPIO pin as output
@@ -935,6 +959,12 @@ void vband_sensor_shutdown(sensor_type_t use_sensors)
           // turn off twi
           twi_disable();
           twi_uninit();
+
+#ifdef LDO_1_8_EN_PIN
+          // turn off 1.8V LDO
+          nrf_gpio_pin_clear(LDO_1_8_EN_PIN);
+#endif
+
       }
     }
 }

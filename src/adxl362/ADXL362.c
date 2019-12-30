@@ -95,11 +95,11 @@ unsigned char ADXL362_Init(void)
     // set ADXL power pin to logic Low
     ADXL362_power(false);
     // wait 5ms
-    nrf_delay_ms(5);
+    nrf_delay_ms(50); // needed for VWedge2.0 with the 2.7V discharge problem
     // set ADXL power pin to logic high
     ADXL362_power(true);
     // wait 5ms
-    nrf_delay_ms(5);
+    nrf_delay_ms(50); // needed 50 ms intsead of 5 for VWedge2.0 with the 2.7V discharge problem
 
     status = SPI_Init(ADXL362_LSB_FIRST, ADXL362_SPI_CLOCK, ADXL362_CLK_POL, ADXL362_CLK_EDGE);
     do

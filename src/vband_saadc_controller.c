@@ -25,6 +25,10 @@
 #include "nrf_log_default_backends.h"
 #if defined(BOARD_VWEDGE_V1)
   #define SAADC_SAMPLES_IN_BUFFER    5    // Number of SAADC samples in RAM before returning a SAADC event. For low power SAADC set this constant to 1. Otherwise the EasyDMA will be enabled for an extended time which consumes high current.
+#elif defined(BOARD_VWEDGE_V2)
+  #define SAADC_SAMPLES_IN_BUFFER    4    // Number of SAADC samples in RAM before returning a SAADC event. For low power SAADC set this constant to 1. Otherwise the EasyDMA will be enabled for an extended time which consumes high current.
+#elif defined(BOARD_VWEDGE_WRIST)
+  #define SAADC_SAMPLES_IN_BUFFER    5    // Number of SAADC samples in RAM before returning a SAADC event. For low power SAADC set this constant to 1. Otherwise the EasyDMA will be enabled for an extended time which consumes high current.
 #else
   #define SAADC_SAMPLES_IN_BUFFER    4    // Number of SAADC samples in RAM before returning a SAADC event. For low power SAADC set this constant to 1. Otherwise the EasyDMA will be enabled for an extended time which consumes high current.
 #endif
@@ -206,6 +210,20 @@ static void vband_saadc_electrode_channels_init(void)
     // detect presence of 5V charging on pin 0.02 AIN0
     nrf_saadc_channel_config_t channel_config4 =
         NRFX_SAADC_DEFAULT_CHANNEL_CONFIG_SE(NRF_SAADC_INPUT_AIN0);
+#elif defined(BOARD_VWEDGE_V2)
+    nrf_saadc_channel_config_t channel_config0 =
+        NRFX_SAADC_DEFAULT_CHANNEL_CONFIG_SE(NRF_SAADC_INPUT_AIN1);
+    nrf_saadc_channel_config_t channel_config1 =
+        NRFX_SAADC_DEFAULT_CHANNEL_CONFIG_SE(NRF_SAADC_INPUT_AIN2);
+    nrf_saadc_channel_config_t channel_config2 =
+        NRFX_SAADC_DEFAULT_CHANNEL_CONFIG_SE(NRF_SAADC_INPUT_AIN3);
+    // using VDDH/5 as input for battery monitoring, need to modify sdk to allow for this selection, otherwise we get ASSERT error
+    nrf_saadc_channel_config_t channel_config3 =
+        NRFX_SAADC_DEFAULT_CHANNEL_CONFIG_SE(SAADC_CH_PSELP_PSELP_VDDHDIV5);
+
+    // detect presence of 5V charging on pin 0.02 AIN0
+//    nrf_saadc_channel_config_t channel_config4 =
+//        NRFX_SAADC_DEFAULT_CHANNEL_CONFIG_SE(NRF_SAADC_INPUT_AIN0);
 #elif defined(BOARD_VWEDGE_WRIST)
     nrf_saadc_channel_config_t channel_config0 =
         NRFX_SAADC_DEFAULT_CHANNEL_CONFIG_SE(NRF_SAADC_INPUT_AIN1);
@@ -258,7 +276,7 @@ static void vband_saadc_electrode_channels_init(void)
     {
       err_code = nrfx_saadc_channel_init(3, &channel_config3);                            //Initialize SAADC channel 3 with the channel configuration
       APP_ERROR_CHECK(err_code);
-#if defined(BOARD_VWEDGE_V1)
+#if defined(BOARD_VWEDGE_V1) || defined(BOARD_VWEDGE_WRIST)
       err_code = nrfx_saadc_channel_init(4, &channel_config4);                            //Initialize SAADC channel 4 with the channel configuration
       APP_ERROR_CHECK(err_code);
 #endif

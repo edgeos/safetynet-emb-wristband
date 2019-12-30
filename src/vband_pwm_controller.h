@@ -56,8 +56,19 @@ typedef enum
 {
     BUZZER_OFF = 0,
     BUZZER_ON_WARNING,
-    BUZZER_ON_ALARM
+    BUZZER_ON_ALARM,
+    BUZZER_ON_LONG_BEEP
 } buzzer_status_t;
+
+/**@brief Buzzer playback repeat enum (for code readability)
+*/
+typedef enum
+{
+    BUZZER_LOOP_FOREVER = 0,
+    BUZZER_LOOP_1,
+    BUZZER_LOOP_2,
+    BUZZER_LOOP_3,
+} buzzer_loop_count_t;
 
 /**@brief LED status.
  *
@@ -83,7 +94,7 @@ typedef struct
 /**@brief Change buzzer state to input status
  *
  */
-void set_buzzer_status(buzzer_status_t status);
+void set_buzzer_status(buzzer_status_t status, buzzer_loop_count_t playback_count);
 
 
 /**@brief Change led state to input status
