@@ -88,6 +88,21 @@
 #define LED_BLE_CONNECTED_PWM_PERIOD                3000  /**< in msec, how often the PWM signal should be turned on */
 #define LED_BLE_CONNECTED_PWM_PERIOD_ON              250  /**< in msec, how long the PWM signal is activated per period */
 
+#define MOTOR_LEVEL1_PWM_FREQUENCY          2000  /**< in Hz, the frequency at which the PWM signal changes */
+#define MOTOR_LEVEL1_PWM_DUTY_CYCLE           20  /**< in %, the duty cycle of PWM signal */
+#define MOTOR_LEVEL1_PWM_PERIOD             1000  /**< in msec, how often the PWM signal should be turned on */
+#define MOTOR_LEVEL1_PWM_PERIOD_ON           100  /**< in msec, how long the PWM signal is activated per period */
+
+#define MOTOR_LEVEL2_PWM_FREQUENCY          2000  /**< in Hz, the frequency at which the PWM signal changes */
+#define MOTOR_LEVEL2_PWM_DUTY_CYCLE           50  /**< in %, the duty cycle of PWM signal */
+#define MOTOR_LEVEL2_PWM_PERIOD              800  /**< in msec, how often the PWM signal should be turned on */
+#define MOTOR_LEVEL2_PWM_PERIOD_ON           100  /**< in msec, how long the PWM signal is activated per period */
+
+#define MOTOR_LEVEL3_PWM_FREQUENCY          2000  /**< in Hz, the frequency at which the PWM signal changes */
+#define MOTOR_LEVEL3_PWM_DUTY_CYCLE           80  /**< in %, the duty cycle of PWM signal */
+#define MOTOR_LEVEL3_PWM_PERIOD              500  /**< in msec, how often the PWM signal should be turned on */
+#define MOTOR_LEVEL3_PWM_PERIOD_ON           100  /**< in msec, how long the PWM signal is activated per period */
+
 static nrfx_pwm_t m_pwm0 = NRFX_PWM_INSTANCE(0); // Assign channel 0 to Buzzer
 static nrfx_pwm_t m_pwm1 = NRFX_PWM_INSTANCE(1);
 static nrfx_pwm_t m_pwm2 = NRFX_PWM_INSTANCE(2);
@@ -284,6 +299,80 @@ void set_led_status(led_status_t new_status)
     {
       m_used |= USED_PWM(1);
       (void)configure_pwm_instance(&m_pwm1, &new_pwm1_vals, 1);
+    }
+}
+
+void set_motor_status(motor_status_t new_status, motor_loop_count_t playback_count)
+{
+    static motor_status_t current_status = MOTOR_OFF;
+
+    // new status = old, no change
+    if (new_status == current_status)
+        return;
+    
+    // propagate state change
+    current_status = new_status;
+    
+    // need to turn off before any state change
+    if (m_used & USED_PWM(2))
+    {
+        if(nrfx_pwm_is_stopped(&m_pwm2) == false)
+        {
+          if(nrfx_pwm_stop(&m_pwm2, true) == false)
+          {
+            NRF_LOG_INFO("PWM2 not stopping");
+          }
+        }
+        nrfx_pwm_uninit(&m_pwm2);
+        nrf_gpio_pin_clear(MOTOR_GPIO); // make sure buzzer pin output is low
+        m_used ^= USED_PWM(2);
+    }
+
+    bool config_buzzer_flag = true;
+    if(playback_count == MOTOR_LOOP_FOREVER) {
+        new_pwm2_vals.loop_flag =      true;
+        playback_count = 1;
+    }
+    else
+    {
+        new_pwm2_vals.loop_flag =      false;
+    }
+    switch (current_status)
+    {
+        case MOTOR_OFF:
+            NRF_LOG_INFO("Turning motor off");
+            config_buzzer_flag = false;
+            break;
+        case MOTOR_1:
+            NRF_LOG_INFO("Transition to warning motor (level1)");
+            new_pwm2_vals.pwm_frequency =  MOTOR_LEVEL1_PWM_FREQUENCY;
+            new_pwm2_vals.pwm_duty_cycle = MOTOR_LEVEL1_PWM_DUTY_CYCLE;
+            new_pwm2_vals.pwm_period =     MOTOR_LEVEL1_PWM_PERIOD;
+            new_pwm2_vals.pwm_period_on =  MOTOR_LEVEL1_PWM_PERIOD_ON;
+            break;
+        case MOTOR_2:
+            NRF_LOG_INFO("Transition to motor level 2");
+            new_pwm2_vals.pwm_frequency =  MOTOR_LEVEL2_PWM_FREQUENCY;
+            new_pwm2_vals.pwm_duty_cycle = MOTOR_LEVEL2_PWM_DUTY_CYCLE;
+            new_pwm2_vals.pwm_period =     MOTOR_LEVEL2_PWM_PERIOD;
+            new_pwm2_vals.pwm_period_on =  MOTOR_LEVEL2_PWM_PERIOD_ON;
+            break;
+        case MOTOR_3:
+            NRF_LOG_INFO("Transition to alarm long beep");
+            new_pwm2_vals.pwm_frequency =  MOTOR_LEVEL3_PWM_FREQUENCY;
+            new_pwm2_vals.pwm_duty_cycle = MOTOR_LEVEL3_PWM_DUTY_CYCLE;
+            new_pwm2_vals.pwm_period =     MOTOR_LEVEL3_PWM_PERIOD;
+            new_pwm2_vals.pwm_period_on =  MOTOR_LEVEL3_PWM_PERIOD_ON;
+            break;
+        default:
+            break;
+    }
+    
+    // configure PWM instance with new vals
+    if (config_buzzer_flag)
+    {
+        m_used |= USED_PWM(2);
+        (void)configure_pwm_instance(&m_pwm2, &new_pwm2_vals, (uint16_t)playback_count);
     }
 }
 

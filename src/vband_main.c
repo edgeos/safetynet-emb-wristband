@@ -113,7 +113,7 @@
 #define BME280_MEASURE_INTERVAL                     2000                                    /**< BME280 measurement interval (ms). */
 #define MAX30105_MEASURE_PROXIMITY_INTERVAL         1000                                     /**< MAX30105 proximity measurement interval (ms). */
 #define MAX30105_MEASURE_HEART_RATE_INTERVAL        15                                      /**< MAX30105 proximity measurement interval (ms). */
-#define ADXL362_MEASURE_INTERVAL                    75                                      /**< ADXL362 measurement interval (ms). */
+#define ADXL362_MEASURE_INTERVAL                    40                                      /**< ADXL362 measurement interval (ms). */
 #define ADXL362_INACTIVITY_WHILE_CONNECTED_TIMEOUT  600                                     /**< ADXL362 sleep interval while connected (seconds). */
 #define USB_DETECT_TIMEOUT_VALUE                    2                                      /**< the number of consecutive times the USB detect must be the opposite state to flip the state. decrement every battery level check (2 sec) */
 
@@ -1750,7 +1750,7 @@ int main(void)
 #endif
 
     // battery is ok, make a boot up sound
-    set_buzzer_status(BUZZER_ON_ALARM, BUZZER_LOOP_2);
+    //set_buzzer_status(BUZZER_ON_ALARM, BUZZER_LOOP_2);
     //set_buzzer_status(BUZZER_ON_LONG_BEEP, BUZZER_LOOP_1);
     //set_buzzer_status(BUZZER_ON_WARNING, BUZZER_LOOP_1);
 

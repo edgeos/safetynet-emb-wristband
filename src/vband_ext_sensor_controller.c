@@ -614,7 +614,8 @@ static void sensor_adxl362_init(void)
           0x02, // 0x29 FIFO samples, watermark lDevel
           0xC0, // 0x2A map INT1 to AWAKE bit, active low
           0x04, // 0x2B map INT2 to FIFO watermark bit, active high
-          0x10, // 0x2C 2g range, quarter bandwidth, 12.5Hz output
+          //0x10, // 0x2C 2g range, quarter bandwidth, 12.5Hz output
+          0x11, // 0x2C 2g range, quarter bandwidth, 25Hz output
           //0x2E // 0x2D ultra low noise, wake up mode, auto sleep, measurement enabled
           0x0E // 0x2D wake up mode, auto sleep, measurement enabled
         };

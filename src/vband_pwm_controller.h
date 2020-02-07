@@ -81,6 +81,24 @@ typedef enum
     LED_BLE_CONNECTED
 } led_status_t;
 
+typedef enum
+{
+    MOTOR_OFF = 0,
+    MOTOR_1,
+    MOTOR_2,
+    MOTOR_3
+} motor_status_t;
+
+/**@brief motor playback repeat enum (for code readability)
+*/
+typedef enum
+{
+    MOTOR_LOOP_FOREVER = 0,
+    MOTOR_LOOP_1,
+    MOTOR_LOOP_2,
+    MOTOR_LOOP_3,
+} motor_loop_count_t;
+
 typedef struct
 {
     uint8_t  gpio;
@@ -101,6 +119,12 @@ void set_buzzer_status(buzzer_status_t status, buzzer_loop_count_t playback_coun
  *
  */
 void set_led_status(led_status_t status);
+
+
+/**@brief Change motor state to input status
+ *
+ */
+void set_motor_status(motor_status_t status, motor_loop_count_t playback_count);
 
 #ifdef __cplusplus
 }
