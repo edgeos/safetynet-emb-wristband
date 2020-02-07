@@ -182,12 +182,15 @@ static sensorsim_cfg_t   m_battery_sim_cfg;                         /**< Battery
 static sensorsim_state_t m_battery_sim_state;                       /**< Battery Level sensor simulator state. */
 
 static bool m_ble_connected_bool = false;
+static bool m_ble_was_connected_bool = false;
 static bool m_usb_detected = true;
 
 static char m_ble_advertising_name[MAX_BLE_NAME_LENGTH] = {0}; // defined in vband_flash_controller.h
 static ble_vband_srv_config_mode_t m_current_vband_mode = BLE_VBAND_SRV_MODE_ENGINEERING;//BLE_VBAND_SRV_MODE_NORMAL;
 static uint32_t m_ble_heart_beat = 1; // 32 bit number for keep alive heart beat from tablet app
 static uint32_t m_ble_heart_beat_last = 2; // last heart beat value
+
+static uint16_t m_buzzer_block_timeout = 0; // a timeout mechanism to prevent buzzer state being updated for some set time. used in the voltage alarm function, happening every 100ms
 
 static ble_uuid_t m_adv_uuids[] =                                   /**< Universally unique service identifiers. */
 {
@@ -288,7 +291,7 @@ static void battery_level_update(void)
     {
         battery_level = 10-(2.55f-battery_voltage)/10;
     }
-#elif defined(BOARD_VWEDGE_V1)
+#elif defined(BOARD_VWEDGE_V1) || defined(BOARD_VWEDGE_WRIST)
     vband_saadc_read_battery_voltage(&battery_voltage);
 #if NRF_LOG_ENABLED
     //NRF_LOG_INFO("battery_voltage " NRF_LOG_FLOAT_MARKER, NRF_LOG_FLOAT(battery_voltage));
@@ -720,10 +723,11 @@ static void sleep_mode_enter(void)
     APP_ERROR_CHECK(err_code);
 
     // turn off buzzer
-    set_buzzer_status(BUZZER_OFF);
+    set_buzzer_status(BUZZER_OFF, BUZZER_LOOP_FOREVER);
 
     // turn off motor
     // not implemented yet
+    set_motor_status(MOTOR_OFF, MOTOR_LOOP_FOREVER);
 
     // turn off led
     set_led_status(LED_OFF);
@@ -745,7 +749,11 @@ static void sleep_mode_enter(void)
 
     // Put any connected sensors into shutdown mode, uninit TWI
     vband_sensor_shutdown(BME280 | CCS811 | MAX30105 | ADXL362);
-       
+    
+    // set GPIO for button to input, no pull
+    nrf_gpio_cfg_input(BUTTON_1 , NRF_GPIO_PIN_NOPULL);
+    nrf_gpio_cfg_input(BUTTON_1B, NRF_GPIO_PIN_NOPULL);
+
     // disable DCDC converter, need to use the softdevice functions because memory access is restricted
     sd_power_dcdc_mode_set(NRF_POWER_DCDC_DISABLE);  // for core 2.7V to 1.3V
     sd_power_dcdc0_mode_set(NRF_POWER_DCDC_DISABLE);  // for VDDH to 2.7V
@@ -840,6 +848,9 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
 
             // Put any connected sensors into measurement mode
             vband_sensor_wakeup(BME280 | CCS811 | MAX30105 | ADXL362);
+
+            m_buzzer_block_timeout = 15;
+            set_buzzer_status(BUZZER_ON_LONG_BEEP, BUZZER_LOOP_1);
 
             break;
 
@@ -1468,18 +1479,30 @@ static void saadc_run_voltage_alarm_algorithm(float * adc_ch1, float * adc_ch2, 
     static voltage_algorithm_results results;
     static uint8_t p_data[sizeof(results)];
     static uint16_t p_data_length = sizeof(results);
-    static bool current_alarm_status = false;
+    static uint8_t current_alarm_status = 0;
 
     current_alarm_status = check_for_voltage_detection(&p_data[0], adc_ch1, adc_ch2, adc_ch3, len);
 
     // control buzzer
-    if((current_alarm_status == true) && (m_usb_detected == false))
+    // do not touch buzzer while the timeout counter is positive
+    if(m_buzzer_block_timeout)
     {
-        set_buzzer_status(BUZZER_ON_ALARM); // consecutive states return without re-initializing
+        m_buzzer_block_timeout--;
     }
     else
     {
-        set_buzzer_status(BUZZER_OFF);
+      if((current_alarm_status > 0) && (m_usb_detected == false))
+      {
+          set_buzzer_status(BUZZER_ON_ALARM, BUZZER_LOOP_FOREVER); // consecutive states return without re-initializing
+          if(current_alarm_status == 3) set_motor_status(MOTOR_3, MOTOR_LOOP_FOREVER); // consecutive states return without re-initializing
+          else {if(current_alarm_status == 2) set_motor_status(MOTOR_2, MOTOR_LOOP_FOREVER); // consecutive states return without re-initializing
+          else {if(current_alarm_status == 1) set_motor_status(MOTOR_1, MOTOR_LOOP_FOREVER);}} // consecutive states return without re-initializing
+      }
+      else
+      {
+          set_buzzer_status(BUZZER_OFF, BUZZER_LOOP_FOREVER);
+          set_motor_status(MOTOR_OFF, MOTOR_LOOP_FOREVER);
+      }
     }
 
     // update ble
@@ -1529,7 +1552,13 @@ int main(void)
 //    nrf_gpio_pin_set(CCS811_WAKEUP_PIN);
     nrf_gpio_cfg_input(CAPSENSOR_BUTTON0, NRF_GPIO_PIN_NOPULL);
     nrf_gpio_cfg_input(CAPSENSOR_BUTTON1, NRF_GPIO_PIN_NOPULL);
-
+#ifdef BOARD_VWEDGE_WRIST
+    nrf_gpio_cfg_output(CAPSENSOR_VDD);
+    nrf_gpio_pin_clear(CAPSENSOR_VDD);
+    nrf_gpio_cfg_input(CAPSENSOR_MTSA, NRF_GPIO_PIN_NOPULL);
+    nrf_gpio_cfg_output(CAPSENSOR_MODE);
+    nrf_gpio_pin_clear(CAPSENSOR_MODE);
+#endif
 
     // enable DCDCs to reduce power consumption
     NRF_POWER->DCDCEN = 1;  // for core 2.7V to 1.3V
@@ -1621,8 +1650,8 @@ int main(void)
 #endif
 
     // check battery level. if battery is too low, go to sleep
- #if defined(BOARD_VWEDGE_V1)
-   
+ #if defined(BOARD_VWEDGE_V1) || defined(BOARD_VWEDGE_WRIST)
+
     vband_saadc_sample_electrode_channels();
     while(battery_voltage == 0)
     //while(1)
@@ -1642,6 +1671,9 @@ int main(void)
     
  #endif
  
+    // battery is ok, make a boot up sound
+    //set_buzzer_status(BUZZER_ON_ALARM, BUZZER_LOOP_1);
+
     if(pdPASS != xTaskCreate(ble_heart_beat_check_task, "BLEHB", configMINIMAL_STACK_SIZE + 200, NULL, 1, &m_heart_beat_thread))
     {
       NRF_LOG_ERROR("heart beat checking task not created.");

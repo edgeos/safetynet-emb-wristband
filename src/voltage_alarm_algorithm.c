@@ -17,7 +17,9 @@
 #include "vband_common.h"
 
 static float freqs_alert[NUM_TEST_FREQS]   = {50.0f, 60.0f};//, 50.0f};   // US and Europe Voltage Frequency
-float mag_threshold[NUM_TEST_FREQS] = {300.0f, 300.0f};//, 30.0f};   // thresholds for the above freqs
+float mag_threshold1[NUM_TEST_FREQS] = {300.0f, 300.0f};//, 30.0f};   // thresholds for the above freqs
+float mag_threshold2[NUM_TEST_FREQS] = {300.0f, 300.0f};//, 30.0f};   // thresholds for the above freqs
+float mag_threshold3[NUM_TEST_FREQS] = {300.0f, 300.0f};//, 30.0f};   // thresholds for the above freqs
 
 // for FFT-based algorithm
 static float m_fft_temp_input_f32[FFT_TEST_IN_SAMPLES_LEN];
@@ -29,6 +31,7 @@ static float sine_wave[FFT_TEST_IN_SAMPLES_LEN];
 static float sine_wave_real[FFT_TEST_IN_SAMPLES_LEN/2];
 
 static bool running_algorithm = false;
+static uint8_t current_alarm_state = 0;
 
 // instance for doing Real FFT
 static arm_rfft_fast_instance_f32 fftInstance;
@@ -161,7 +164,7 @@ static void add_imag_data(float * input, float * output, uint16_t len)
     }
 }
 
-static bool run_fft_single_channel(float * input, uint16_t len)
+static uint8_t run_fft_single_channel(float * input, uint16_t len)
 {
     uint8_t nearest_ind = 0;
     uint16_t mid_i = len/2;
@@ -222,7 +225,8 @@ static bool run_fft_single_channel(float * input, uint16_t len)
 //    }
 
     // check for threshold hit
-    //float mag_sq;
+    float mag_temp;
+    uint8_t highest_alarm_level = 0;
     //uint8_t num__freqs = sizeof(freqs_alert)/sizeof(freqs_alert[0]);
     for (uint8_t i = 0; i < NUM_TEST_FREQS; i++)
     {
@@ -232,18 +236,34 @@ static bool run_fft_single_channel(float * input, uint16_t len)
         //NRF_LOG_INFO("bin size: %dHz", hz_per_index);
         //NRF_LOG_INFO("FFT index: %d", nearest_ind);
         //NRF_LOG_INFO("FFT MAG: " NRF_LOG_FLOAT_MARKER, NRF_LOG_FLOAT(m_pos_freq_fft_mag[nearest_ind]));
-        if ((log(m_pos_freq_fft_mag[nearest_ind])*LOG_MULT_FACTOR+LOG_OFFSET_FACTOR) >= mag_threshold[i])
+        mag_temp = log(m_pos_freq_fft_mag[nearest_ind])*LOG_MULT_FACTOR+LOG_OFFSET_FACTOR;
+        // 3 alarm levels
+        if (mag_temp >= mag_threshold3[i])
         {
 //            NRF_LOG_INFO("threshold %d: " NRF_LOG_FLOAT_MARKER, i, NRF_LOG_FLOAT(mag_threshold[i]));
 //            NRF_LOG_INFO("exceed threshold " NRF_LOG_FLOAT_MARKER " index: %d", NRF_LOG_FLOAT(log(m_pos_freq_fft_mag[nearest_ind])*LOG_MULT_FACTOR+LOG_OFFSET_FACTOR), nearest_ind);
-            return true;
+            if(highest_alarm_level < 3) highest_alarm_level = 3;
         }
         else
         {
-            //NRF_LOG_INFO("didn't exceed threshold " NRF_LOG_FLOAT_MARKER " index: %d", NRF_LOG_FLOAT(log(m_pos_freq_fft_mag[nearest_ind])*LOG_MULT_FACTOR+LOG_OFFSET_FACTOR), nearest_ind);
+          if (mag_temp >= mag_threshold2[i])
+          {
+              if(highest_alarm_level < 2) highest_alarm_level = 2;
+          }
+          else
+          {
+            if (mag_temp >= mag_threshold1[i])
+            {
+                if(highest_alarm_level < 1) highest_alarm_level = 1;
+            }
+            else
+            {
+                //NRF_LOG_INFO("didn't exceed threshold " NRF_LOG_FLOAT_MARKER " index: %d", NRF_LOG_FLOAT(log(m_pos_freq_fft_mag[nearest_ind])*LOG_MULT_FACTOR+LOG_OFFSET_FACTOR), nearest_ind);
+            }
+          }
         }
     }
-    return false;
+    return highest_alarm_level;
 }
 
 static void fft_algorithm(struct voltage_algorithm_results *results, float * adc_ch1, float * adc_ch2, float * adc_ch3, uint16_t len)
@@ -394,7 +414,7 @@ static bool run_goertzel_single_channel(float * input, uint16_t len)
         mag_sq = powf(Q1, 2) + powf(Q2, 2) - (Q1*Q2*coeff[i]);
         mag    = sqrtf(mag_sq);
         //NRF_LOG_INFO("GOERTZEL MAG: " NRF_LOG_FLOAT_MARKER, NRF_LOG_FLOAT(mag));
-        if (mag >= mag_threshold[i])
+        if (mag >= mag_threshold1[i])
         {
             return true;
         }
@@ -411,9 +431,8 @@ static void goertzel_algorithm(struct voltage_algorithm_results *results, float 
     clear_FPU_interrupts();
 }
 
-static bool check_for_alarm_state_change(bool ch1_alarm, bool ch2_alarm, bool ch3_alarm)
+static uint8_t check_for_alarm_state_change(uint8_t ch1_alarm, uint8_t ch2_alarm, uint8_t ch3_alarm)
 {
-    static bool current_alarm_state = false;
     //static bool current_alarm_buf[NUM_CONSEC_TO_ALARM] = {false};
     //static bool current_unalarm_buf[NUM_CONSEC_TO_UNALARM] = {true};
     //static uint8_t idx1 = 0;
@@ -436,39 +455,32 @@ static bool check_for_alarm_state_change(bool ch1_alarm, bool ch2_alarm, bool ch
         alarm_on_count = 0;
     }
 
-    uint8_t i;
-    if (current_alarm_state == false && alarm_on_count >= NUM_CONSEC_TO_ALARM)
+    if (current_alarm_state > 0)
     {
-        //idx1 = (idx1 + 1) % NUM_CONSEC_TO_ALARM;
-        current_alarm_state = true;
-//        for (i = 0; i < NUM_CONSEC_TO_ALARM; i++)
-//        {
-//            if (current_alarm_buf[i] == false)
-//            {
-                //current_alarm_state = false;
-                //break;
-            //}
-        //}
+      if(alarm_off_count >= NUM_CONSEC_TO_UNALARM)
+      {
+        current_alarm_state = 0;
+      }
+      else
+      {
+        current_alarm_state = ch1_alarm;
+        if(ch2_alarm > current_alarm_state) current_alarm_state = ch2_alarm;
+        if(ch3_alarm > current_alarm_state) current_alarm_state = ch3_alarm;
+      }
     }
-    if (current_alarm_state == true && alarm_off_count >= NUM_CONSEC_TO_UNALARM)
-//    else
+    else // current_alarm_state == 0
     {
-        //idx2 = (idx2 + 1) % NUM_CONSEC_TO_UNALARM;
-        current_alarm_state = false;
-        //for (i = 0; i < NUM_CONSEC_TO_UNALARM; i++)
-        //{
-          //  if (current_unalarm_buf[i] == false)
-            //{
-                //NRF_LOG_INFO("unalarm false: %d", i);
-                //current_alarm_state = true;
-                //break;
-            //}
-        //}
+      if(alarm_on_count >= NUM_CONSEC_TO_ALARM)
+      {
+        current_alarm_state = ch1_alarm;
+        if(ch2_alarm > current_alarm_state) current_alarm_state = ch2_alarm;
+        if(ch3_alarm > current_alarm_state) current_alarm_state = ch3_alarm;
+      }
     }
     return current_alarm_state;
 }
 
-bool check_for_voltage_detection(uint8_t *results_buf, float * adc_ch1, float * adc_ch2, float * adc_ch3, uint16_t len)
+uint8_t check_for_voltage_detection(uint8_t *results_buf, float * adc_ch1, float * adc_ch2, float * adc_ch3, uint16_t len)
 {
     static voltage_algorithm_results results;
     
@@ -538,6 +550,14 @@ void set_voltage_alarm_threshold(uint32_t * threshold)
     while (running_algorithm) {nrf_delay_us(1);}
     for(uint8_t i = 0; i < NUM_TEST_FREQS; i++)
     {
-        mag_threshold[i] = *threshold*1.0f;
+        // 3 alarm levels
+        mag_threshold1[i] = *threshold*1.0f;
+        if(*threshold < 255) {
+          mag_threshold2[i] = ((255 - *threshold)/3.0f)+*threshold;
+          mag_threshold3[i] = ((255 - *threshold)/1.5f)+*threshold;
+        } else {
+          mag_threshold2[i] = *threshold*1.0f;
+          mag_threshold3[i] = *threshold*1.0f;
+        }
     }
-}                     
+}

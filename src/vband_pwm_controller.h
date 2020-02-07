@@ -56,8 +56,19 @@ typedef enum
 {
     BUZZER_OFF = 0,
     BUZZER_ON_WARNING,
-    BUZZER_ON_ALARM
+    BUZZER_ON_ALARM,
+    BUZZER_ON_LONG_BEEP
 } buzzer_status_t;
+
+/**@brief Buzzer playback repeat enum (for code readability)
+*/
+typedef enum
+{
+    BUZZER_LOOP_FOREVER = 0,
+    BUZZER_LOOP_1,
+    BUZZER_LOOP_2,
+    BUZZER_LOOP_3,
+} buzzer_loop_count_t;
 
 /**@brief LED status.
  *
@@ -69,6 +80,24 @@ typedef enum
     LED_BLE_ADVERTISTING,
     LED_BLE_CONNECTED
 } led_status_t;
+
+typedef enum
+{
+    MOTOR_OFF = 0,
+    MOTOR_1,
+    MOTOR_2,
+    MOTOR_3
+} motor_status_t;
+
+/**@brief motor playback repeat enum (for code readability)
+*/
+typedef enum
+{
+    MOTOR_LOOP_FOREVER = 0,
+    MOTOR_LOOP_1,
+    MOTOR_LOOP_2,
+    MOTOR_LOOP_3,
+} motor_loop_count_t;
 
 typedef struct
 {
@@ -83,13 +112,20 @@ typedef struct
 /**@brief Change buzzer state to input status
  *
  */
-void set_buzzer_status(buzzer_status_t status);
+void set_buzzer_status(buzzer_status_t status, buzzer_loop_count_t playback_count);
 
 
 /**@brief Change led state to input status
  *
  */
 void set_led_status(led_status_t status);
+
+
+/**@brief Change motor state to input status
+ *
+ */
+void set_motor_status(motor_status_t status, motor_loop_count_t playback_count);
+
 
 #ifdef __cplusplus
 }

@@ -34,10 +34,10 @@ extern "C" {
 
 #pragma pack(1)
 typedef struct voltage_algorithm_results {
-        bool overall_alarm;
-	bool ch1_alarm;
-	bool ch2_alarm;
-	bool ch3_alarm;
+        uint8_t overall_alarm;
+	uint8_t ch1_alarm;
+	uint8_t ch2_alarm;
+	uint8_t ch3_alarm;
         uint8_t num_fft_bins;
         uint8_t fft_bin_size;
         uint8_t ch1_fft_results[FFT_BLE_SAMPLES_LEN];
@@ -45,7 +45,7 @@ typedef struct voltage_algorithm_results {
         uint8_t ch3_fft_results[FFT_BLE_SAMPLES_LEN];
 } voltage_algorithm_results;
 
-bool check_for_voltage_detection(uint8_t *results_buf, 
+uint8_t check_for_voltage_detection(uint8_t *results_buf, 
                                  float * adc_ch1, 
                                  float * adc_ch2, 
                                  float * adc_ch3, 

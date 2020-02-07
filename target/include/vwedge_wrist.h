@@ -66,6 +66,7 @@ extern "C" {
 #define BUTTON_1             NRF_GPIO_PIN_MAP(1,7)
 #define BUTTON_PULL          NRF_GPIO_PIN_PULLDOWN
 #define BUTTONS_LIST         { BUTTON_1 }
+#define BUTTON_1B            NRF_GPIO_PIN_MAP(1,6)
 
 // Buzzer
 #define BUZZER_GPIO           NRF_GPIO_PIN_MAP(0,23)
